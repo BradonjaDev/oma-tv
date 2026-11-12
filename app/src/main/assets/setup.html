@@ -54,9 +54,14 @@ button {
 }
 button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; flex: 1 1 auto; }
 button:active { transform: translateY(1px); }
-details { margin: 12px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
+#tip { margin: 12px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
 summary { cursor: pointer; font-weight: 600; min-height: 32px; }
-details .hint { margin-top: 8px; }
+#tip .hint { margin-top: 8px; }
+summary.head { display: flex; align-items: center; gap: 8px; font-size: 17px; list-style: none; }
+summary.head::-webkit-details-marker { display: none; }
+summary.head::after { content: '▾'; margin-left: auto; color: var(--muted); font-size: 20px; }
+details[open] > summary.head::after { content: '▴'; }
+details[open] > summary.head { margin-bottom: 10px; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
 .chip { min-height: 40px; padding: 6px 13px; border-radius: 999px; font-size: 15px; }
 .chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
@@ -116,11 +121,14 @@ li:first-child { border-top: 0; }
   </section>
 
   <section class="card">
-    <h2><span class="step">3</span>Sender hinzufügen</h2>
+    <details id="addBox">
+    <summary class="head"><span class="step">3</span>Sender auswählen <span id="allCount" class="count"></span></summary>
+    <p class="hint">Mit <b>+</b> legst du fest, welche Sender Oma sieht. Solange nichts ausgewählt ist, sieht sie alle. Tippe auf einen Namen, um ihn am Fernseher zu testen.</p>
     <input id="search" type="search" placeholder="Sender suchen …" autocomplete="off" aria-label="Sender suchen">
     <select id="group" aria-label="Gruppe"></select>
     <p id="resultInfo" class="hint"></p>
     <ul id="results"></ul>
+    </details>
   </section>
 
   <section class="card">
@@ -207,7 +215,7 @@ li:first-child { border-top: 0; }
     $('favHint').textContent = favs.length
       ? 'Das sieht Oma, in dieser Reihenfolge. Tippe auf einen Namen, um ihn am Fernseher zu testen.'
       : (all.length
-        ? 'Noch keine Auswahl: Oma sieht alle ' + all.length + ' Sender der Liste. Wähle unten mit + ihre Sender aus.'
+        ? 'Noch keine Auswahl, deshalb sieht Oma alle ' + all.length + ' Sender der Liste. Sobald du unten mit + Sender auswählst, sieht sie nur noch diese, in deiner Reihenfolge.'
         : 'Sobald eine Senderliste geladen ist, kannst du hier Omas Sender auswählen.');
     favs.forEach(function (key, i) {
       var ch = byKey.get(key);
@@ -305,7 +313,15 @@ li:first-child { border-top: 0; }
     return li;
   }
 
+  var addBoxInit = false;
+
   function renderAll() {
+    $('allCount').textContent = all.length ? '(' + all.length + ')' : '';
+    // Beim ersten Laden: aufgeklappt, solange noch nichts ausgewaehlt ist
+    if (!addBoxInit && all.length) {
+      addBoxInit = true;
+      $('addBox').open = favs.length === 0;
+    }
     renderFavs();
     renderGroups();
     renderResults();
