@@ -11,7 +11,9 @@ import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -79,8 +81,9 @@ public class MainActivity extends Activity implements SetupServer.Backend {
     static final String KEY_SOURCES = "sources";
     private static final String KEY_FAVORITES = "favorites";
     private static final String KEY_LAST = "last";
+    private static final String KEY_HINT = "touchHint";
 
-    private static final String VERSION = "1.0";
+    private static final String VERSION = "1.1";
     private static final String USER_AGENT = "OmaTV/" + VERSION + " (Android TV)";
     private static final long REFRESH_EVERY_MS = 6L * 60 * 60 * 1000;
     private static final long RETRY_REFRESH_MS = 2L * 60 * 1000;
@@ -243,6 +246,26 @@ public class MainActivity extends Activity implements SetupServer.Backend {
     }
 
     @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && !isTv) hideSystemBars();
+    }
+
+    /** Am Handy/Tablet echtes Vollbild: Status- und Navigationsleiste ausblenden. */
+    @SuppressWarnings("deprecation")
+    private void hideSystemBars() {
+        try {
+            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        } catch (Exception ignored) {
+        }
+    }
+
+    @Override
     protected void onDestroy() {
         destroyed = true;
         stopServer();
@@ -271,6 +294,13 @@ public class MainActivity extends Activity implements SetupServer.Backend {
             } catch (Exception ignored) {
             }
         }
+        if (!tv) {
+            // Android-Boxen ohne Touchscreen werden wie ein Fernseher behandelt.
+            try {
+                if (!getPackageManager().hasSystemFeature("android.hardware.touchscreen")) tv = true;
+            } catch (Exception ignored) {
+            }
+        }
         isTv = tv;
         if (isTv) {
             scale = 1f;
@@ -278,9 +308,10 @@ public class MainActivity extends Activity implements SetupServer.Backend {
         }
         DisplayMetrics m = getResources().getDisplayMetrics();
         float shortestDp = Math.min(m.widthPixels, m.heightPixels) / m.density;
-        float s = shortestDp / 540f; // 540dp entspricht etwa der kurzen Seite eines 1080p-Fernsehers
-        if (s < 0.6f) s = 0.6f;
-        if (s > 1.1f) s = 1.1f;
+        // Etwas groesser als rein proportional zum Fernseher, damit Zeilen gut antippbar bleiben.
+        float s = shortestDp / 480f;
+        if (s < 0.65f) s = 0.65f;
+        if (s > 1.15f) s = 1.15f;
         scale = s;
     }
 
@@ -291,7 +322,9 @@ public class MainActivity extends Activity implements SetupServer.Backend {
     /** Breite der Senderliste: am Handy darf sie den Bildschirm nicht sprengen. */
     private int listWidth() {
         int wide = dp(470);
-        int cap = Math.round(getResources().getDisplayMetrics().widthPixels * 0.88f);
+        DisplayMetrics m = getResources().getDisplayMetrics();
+        // Kurze Seite: so passt die Liste auch nach dem Drehen ins Hochformat.
+        int cap = Math.round(Math.min(m.widthPixels, m.heightPixels) * 0.88f);
         return Math.min(wide, cap);
     }
 
@@ -302,6 +335,24 @@ public class MainActivity extends Activity implements SetupServer.Backend {
         if (bold) t.setTypeface(Typeface.DEFAULT_BOLD);
         t.setFocusable(false);
         return t;
+    }
+
+    /** Grosser, gut antippbarer Knopf fuer die Einrichtung am Handy. */
+    private TextView button(String label, boolean primary) {
+        TextView b = text(26, primary ? Color.BLACK : WHITE, true);
+        b.setText(label);
+        b.setGravity(Gravity.CENTER);
+        b.setPadding(dp(20), dp(18), dp(20), dp(18));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(14));
+        if (primary) bg.setColor(AMBER);
+        else {
+            bg.setColor(0x22FFFFFF);
+            bg.setStroke(Math.max(1, dp(2)), GREY);
+        }
+        b.setBackground(bg);
+        b.setClickable(true);
+        return b;
     }
 
     private TextView oneLine(float sp, int color, boolean bold) {
@@ -391,9 +442,21 @@ public class MainActivity extends Activity implements SetupServer.Backend {
             rows[i] = row;
             listBox.addView(row, new LinearLayout.LayoutParams(MATCH, dp(52)));
         }
-        listFooter = oneLine(15, GREY, false);
+        listFooter = oneLine(isTv ? 15 : 24, isTv ? GREY : AMBER, false);
         LinearLayout.LayoutParams footLp = new LinearLayout.LayoutParams(MATCH, WRAP);
         footLp.topMargin = dp(10);
+        if (!isTv) {
+            // Am Handy fuehrt die Fusszeile direkt in die Einstellungen.
+            listFooter.setPadding(dp(14), dp(10), dp(14), dp(10));
+            listFooter.setClickable(true);
+            listFooter.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    closeList();
+                    openSettingsMenu();
+                }
+            });
+        }
         listBox.addView(listFooter, footLp);
         listBox.setVisibility(View.GONE);
         root.addView(listBox, new FrameLayout.LayoutParams(listWidth(), MATCH, Gravity.LEFT));
@@ -403,38 +466,63 @@ public class MainActivity extends Activity implements SetupServer.Backend {
         setupBox.setOrientation(LinearLayout.VERTICAL);
         setupBox.setGravity(Gravity.CENTER_VERTICAL);
         setupBox.setBackgroundColor(0xFF0D1B2A);
-        setupBox.setPadding(dp(96), dp(40), dp(96), dp(40));
+        setupBox.setPadding(dp(isTv ? 96 : 30), dp(40), dp(isTv ? 96 : 30), dp(40));
         TextView title = text(42, WHITE, true);
         title.setText("Oma TV einrichten");
         setupBox.addView(title, new LinearLayout.LayoutParams(MATCH, WRAP));
         TextView steps = text(26, WHITE, false);
-        steps.setText("1.  Handy ins gleiche WLAN wie diesen Fernseher bringen\n"
-                + "2.  Im Browser des Handys diese Adresse öffnen:");
+        steps.setText(isTv
+                ? "1.  Handy ins gleiche WLAN wie diesen Fernseher bringen\n"
+                + "2.  Im Browser des Handys diese Adresse öffnen:"
+                : "Tippe unten auf „M3U-Link eingeben“.\n"
+                + "Oder öffne an einem anderen Gerät im gleichen WLAN diese Adresse im Browser:");
         steps.setLineSpacing(dp(6), 1f);
         LinearLayout.LayoutParams stepsLp = new LinearLayout.LayoutParams(MATCH, WRAP);
         stepsLp.topMargin = dp(26);
         setupBox.addView(steps, stepsLp);
-        setupAddress = text(46, AMBER, true);
+        setupAddress = text(isTv ? 46 : 34, AMBER, true);
+        if (!isTv && Build.VERSION.SDK_INT >= 26) {
+            // Die Adresse soll am Handy in eine Zeile passen: Schrift bei Bedarf verkleinern.
+            setupAddress.setMaxLines(1);
+            setupAddress.setAutoSizeTextTypeUniformWithConfiguration(
+                    10, Math.max(11, Math.round(34 * scale)), 1, TypedValue.COMPLEX_UNIT_SP);
+        }
         LinearLayout.LayoutParams addrLp = new LinearLayout.LayoutParams(MATCH, WRAP);
         addrLp.topMargin = dp(14);
         addrLp.bottomMargin = dp(14);
-        addrLp.leftMargin = dp(48);
+        addrLp.leftMargin = isTv ? dp(48) : 0;
         setupBox.addView(setupAddress, addrLp);
         TextView step3 = text(26, WHITE, false);
-        step3.setText("3.  Dort den M3U-Link einfügen und Omas Sender auswählen");
+        step3.setText(isTv
+                ? "3.  Dort den M3U-Link einfügen und Omas Sender auswählen"
+                : "Dort lassen sich auch Omas Sender auswählen und sortieren.");
         setupBox.addView(step3, new LinearLayout.LayoutParams(MATCH, WRAP));
+        if (!isTv) {
+            TextView linkButton = button("M3U-Link eingeben", true);
+            linkButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    showSourcesDialog();
+                }
+            });
+            LinearLayout.LayoutParams b1 = new LinearLayout.LayoutParams(MATCH, WRAP);
+            b1.topMargin = dp(30);
+            setupBox.addView(linkButton, b1);
+            TextView pageButton = button("Einrichtungsseite öffnen", false);
+            pageButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    openSetupPage();
+                }
+            });
+            LinearLayout.LayoutParams b2 = new LinearLayout.LayoutParams(MATCH, WRAP);
+            b2.topMargin = dp(14);
+            setupBox.addView(pageButton, b2);
+        }
         setupStatus = text(22, GREY, false);
         LinearLayout.LayoutParams statLp = new LinearLayout.LayoutParams(MATCH, WRAP);
         statLp.topMargin = dp(34);
         setupBox.addView(setupStatus, statLp);
-        if (!isTv) {
-            TextView phoneHint = text(20, GREY, false);
-            phoneHint.setText("Auf diesem Gerät: lange auf das Bild tippen öffnet die Einstellungen "
-                    + "(M3U-Link eingeben, Sender auswählen).");
-            LinearLayout.LayoutParams phoneLp = new LinearLayout.LayoutParams(MATCH, WRAP);
-            phoneLp.topMargin = dp(20);
-            setupBox.addView(phoneHint, phoneLp);
-        }
 
         // Der Inhalt kann auf kleinen/gedrehten Bildschirmen hoeher als der Schirm sein.
         // In einem ScrollView wird er dann scrollbar, statt abgeschnitten zu werden.
@@ -477,7 +565,8 @@ public class MainActivity extends Activity implements SetupServer.Backend {
     private void updateTexts() {
         setupAddress.setText(address.isEmpty() ? "Kein WLAN gefunden – bitte Netzwerk prüfen" : address);
         setupStatus.setText(status);
-        listFooter.setText(address.isEmpty() ? "" : "Einstellungen am Handy:  " + address);
+        if (isTv) listFooter.setText(address.isEmpty() ? "" : "Einstellungen am Handy:  " + address);
+        else listFooter.setText("⚙  Einstellungen");
     }
 
     private void showBanner() {
@@ -486,6 +575,14 @@ public class MainActivity extends Activity implements SetupServer.Backend {
         bannerName.setText(current.name);
         bannerClock.setText(new SimpleDateFormat("HH:mm", Locale.GERMANY).format(new Date()) + " Uhr");
         banner.setVisibility(View.VISIBLE);
+        if (!isTv && !prefs.getBoolean(KEY_HINT, false)) {
+            prefs.edit().putBoolean(KEY_HINT, true).apply();
+            try {
+                Toast.makeText(this, "Wischen: umschalten · Tippen: Senderliste · Lange drücken: Einstellungen",
+                        Toast.LENGTH_LONG).show();
+            } catch (Exception ignored) {
+            }
+        }
         ui.removeCallbacks(hideBanner);
         ui.postDelayed(hideBanner, 4500);
     }
@@ -646,8 +743,17 @@ public class MainActivity extends Activity implements SetupServer.Backend {
                     tune(visible.get(previousIndex), previousIndex, 0);
                 }
                 break;
+            case KeyEvent.KEYCODE_BACK:
+            case KeyEvent.KEYCODE_ESCAPE:
+                // Am Fernseher wird die App nicht versehentlich verlassen. Am Handy legt Zurueck
+                // sie wie gewohnt in den Hintergrund.
+                if (repeat == 0) {
+                    if (isTv) showBanner();
+                    else moveTaskToBack(true);
+                }
+                break;
             default:
-                // Zurueck/Info: nur die Senderanzeige einblenden. Die App wird nicht versehentlich verlassen.
+                // Info und Co.: nur die Senderanzeige einblenden.
                 if (repeat == 0) showBanner();
                 break;
         }
@@ -1235,7 +1341,7 @@ public class MainActivity extends Activity implements SetupServer.Backend {
         }
     };
 
-    /** Innerhalb der offenen Senderliste: ein vertikaler Wisch scrollt (blaettert) durch die Liste. */
+    /** Innerhalb der offenen Senderliste: Ziehen mit dem Finger scrollt durch die Liste. */
     private final GestureDetector.SimpleOnGestureListener listGestureListener = new GestureDetector.SimpleOnGestureListener() {
         @Override
         public boolean onDown(MotionEvent e) {
@@ -1243,15 +1349,23 @@ public class MainActivity extends Activity implements SetupServer.Backend {
         }
 
         @Override
-        public boolean onFling(MotionEvent e1, MotionEvent e2, float vx, float vy) {
-            if (Math.abs(vy) > Math.abs(vx)) {
-                int page = Math.max(1, rows.length - 1);
-                moveList(vy < 0 ? page : -page, false); // nach oben wischen = weiter nach unten in der Liste
-                return true;
+        public boolean onScroll(MotionEvent e1, MotionEvent e2, float dx, float dy) {
+            // Die Liste folgt dem Finger: pro Zeilenhoehe geht es einen Sender weiter.
+            int rowPx = Math.max(1, dp(52));
+            listScroll += dy;
+            while (listScroll >= rowPx) {
+                listScroll -= rowPx;
+                moveList(1, false);
             }
-            return false;
+            while (listScroll <= -rowPx) {
+                listScroll += rowPx;
+                moveList(-1, false);
+            }
+            return true;
         }
     };
+
+    private float listScroll;
 
     /**
      * Senderliste mit Touch: ein klarer vertikaler Wisch wird abgefangen und scrollt die Liste,
@@ -1271,6 +1385,7 @@ public class MainActivity extends Activity implements SetupServer.Backend {
                 case MotionEvent.ACTION_DOWN:
                     downY = e.getY();
                     scrolling = false;
+                    listScroll = 0;
                     if (listGesture != null) listGesture.onTouchEvent(e);
                     break;
                 case MotionEvent.ACTION_MOVE:

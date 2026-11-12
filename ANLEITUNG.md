@@ -6,27 +6,21 @@ Eine Fernseh-App mit genau einer Aufgabe: Omas Sender zeigen und mit ▲▼ umsc
 
 ---
 
-## 1. Die App bauen lassen (einmalig, kostenlos)
+## 1. Die App holen
 
-GitHub baut aus dem Projekt automatisch die Installationsdatei (APK). Du musst nichts programmieren.
+Die fertige Installationsdatei (APK) liegt immer unter dieser Adresse:
 
-1. Auf [github.com](https://github.com) anmelden oder kostenlos registrieren.
-2. Oben rechts **+** → **New repository**. Name `oma-tv`, Sichtbarkeit **Public**, dann **Create repository**.
-3. Auf der leeren Projektseite den Link **uploading an existing file** anklicken, die Datei `oma-tv-projekt.zip` auswählen, unten **Commit changes**.
-4. **Add file** → **Create new file**. Als Dateinamen exakt eintippen:
-   `.github/workflows/build.yml`
-   Den kompletten Inhalt der mitgelieferten Datei `build.yml` hineinkopieren, dann **Commit changes**.
-5. Reiter **Actions** öffnen. Dort läuft jetzt „APK bauen“. Nach etwa 3–5 Minuten erscheint ein grüner Haken.
-6. Die fertige App liegt ab jetzt immer unter dieser Adresse (DEIN-NAME ersetzen):
-   `github.com/DEIN-NAME/oma-tv/releases/latest/download/oma-tv.apk`
+`github.com/BradonjaDev/oma-tv/releases/latest/download/oma-tv.apk`
 
-Erscheint ein rotes ✕ statt des grünen Hakens: den Lauf anklicken, die rot markierte Zeile kopieren und mir schicken. Dann behebe ich das.
+GitHub baut sie bei jeder Änderung am Projekt automatisch neu. Du musst nichts programmieren.
+
+**Eigene Kopie (optional):** Wer das Projekt selbst verwalten möchte, meldet sich auf [github.com](https://github.com) an, klickt auf der Projektseite oben rechts auf **Fork** und schaltet im Reiter **Actions** die Workflows ein. Nach dem ersten Lauf von „APK bauen“ liegt die APK unter `github.com/DEIN-NAME/oma-tv/releases/latest/download/oma-tv.apk`.
 
 ## 2. Auf dem Stick installieren
 
 1. Stick normal einrichten (WLAN, Google-Konto).
 2. Im Play Store auf dem Stick die App **Downloader** (von AFTVnews) installieren und öffnen.
-3. Die Adresse aus Schritt 1.6 eintippen und **Go** drücken.
+3. Die Adresse aus Schritt 1 eintippen und **Go** drücken.
 4. Der Stick fragt einmalig, ob Downloader Apps installieren darf: erlauben, dann **Installieren**. Eine Warnung vor „unbekannter App“ mit „Trotzdem installieren“ bestätigen.
 5. **Oma TV** öffnen.
 
@@ -61,10 +55,19 @@ Später etwas ändern? Am Fernseher **OK** drücken: unten in der Senderliste st
 
 Fällt ein Sender aus, versucht die App es von selbst immer wieder. Oma muss nichts wegdrücken.
 
+## 6. Am Handy oder Tablet
+
+Oma TV läuft auch direkt auf einem Android-Handy oder -Tablet, im Hoch- und Querformat.
+
+- **Einrichten:** Beim ersten Start auf **M3U-Link eingeben** tippen, den Link einfügen, **Speichern**. Über **Einrichtungsseite öffnen** lassen sich im Browser Omas Sender auswählen und sortieren.
+- **Umschalten:** nach oben oder unten wischen, oder oben bzw. unten auf das Bild tippen.
+- **Senderliste:** in die Mitte tippen, mit dem Finger scrollen, Sender antippen.
+- **Einstellungen:** lange auf das Bild drücken, oder in der Senderliste unten auf **⚙ Einstellungen** tippen.
+
 ## Gut zu wissen
 
 - **Noch nicht auf einem echten Gerät gelaufen.** Geprüft sind das Lesen der Senderlisten, die Handy-Seite (im Browser) und die Abläufe der App in einer Simulation. Die APK selbst entsteht erst bei GitHub. Hakt am Fernseher etwas, sag mir Bescheid.
-- **Updates:** neue `oma-tv-projekt.zip` ins GitHub-Projekt hochladen (alte ersetzen), warten, dieselbe Adresse im Downloader erneut öffnen. Einstellungen und Senderauswahl bleiben erhalten.
+- **Updates:** dieselbe Adresse im Downloader erneut öffnen und installieren. Einstellungen und Senderauswahl bleiben erhalten.
 - Bewusst weggelassen: Programmzeitschrift (EPG), Aufnahme, Filme und Serien aus der Liste (werden ausgeblendet).
 - Die Einrichtungsseite kann jeder im selben WLAN öffnen, solange Oma TV läuft.
 - Der Signaturschlüssel der App liegt im Projekt und ist damit öffentlich. Für eine private App ist das unkritisch; wer es nicht möchte, stellt das GitHub-Projekt auf „Private“ und lädt die APK angemeldet von der Projektseite unter „Releases“.
