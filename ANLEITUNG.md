@@ -32,7 +32,7 @@ Beim ersten Start zeigt der Fernseher eine Adresse wie `http://192.168.178.50:80
 
 1. Handy ins gleiche WLAN bringen und die Adresse im Browser öffnen.
 2. **M3U-Link** einfügen → **Speichern und Sender laden**. Mehrere Links: einer pro Zeile. Statt eines Links kannst du auch den ganzen Inhalt einer M3U-Playlist einfügen.
-   Noch keinen Link? Frei zugängliche deutsche Sender gibt es zum Beispiel hier: `https://iptv-org.github.io/iptv/countries/de.m3u` (Projekt [iptv-org/iptv](https://github.com/iptv-org/iptv)). Weitere gepflegte Listen stehen in der [README](README.md#wo-bekomme-ich-eine-senderliste).
+   Noch keinen Link? Auf **Tipp: Noch keine Senderliste?** tippen, ein Land oder mehrere auswählen, **Übernehmen und Sender laden**. Die frei zugänglichen Sender stammen vom Projekt [iptv-org/iptv](https://github.com/iptv-org/iptv).
 3. Unter **Sender hinzufügen** bei Omas Sendern auf **+** tippen. Mit ▲▼ in ihre gewohnte Reihenfolge bringen (1 = Das Erste, 2 = ZDF …).
 4. Auf einen Sendernamen tippen spielt ihn sofort am Fernseher – so testest du jeden Sender.
 

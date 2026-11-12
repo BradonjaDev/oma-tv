@@ -39,6 +39,7 @@ h2 { font-size: 17px; margin: 0 0 8px; display: flex; align-items: center; gap: 
 }
 .count { color: var(--muted); font-weight: 400; font-size: 15px; }
 .hint { color: var(--muted); font-size: 14px; margin: 0 0 10px; }
+a { color: var(--accent); }
 code { background: var(--soft); padding: 1px 5px; border-radius: 5px; font-size: 13px; }
 textarea, input[type=search], select {
   width: 100%; font: inherit; color: var(--ink); background: var(--bg);
@@ -53,6 +54,12 @@ button {
 }
 button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; flex: 1 1 auto; }
 button:active { transform: translateY(1px); }
+details { margin: 12px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
+summary { cursor: pointer; font-weight: 600; min-height: 32px; }
+details .hint { margin-top: 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.chip { min-height: 40px; padding: 6px 13px; border-radius: 999px; font-size: 15px; }
+.chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
 .status { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
 .status.err { color: var(--warn); }
 ol, ul { list-style: none; margin: 0; padding: 0; }
@@ -94,6 +101,12 @@ li:first-child { border-top: 0; }
       <button id="reload">Neu laden</button>
     </div>
     <p id="status" class="status" role="status"></p>
+    <details id="tip">
+      <summary>Tipp: Noch keine Senderliste?</summary>
+      <p class="hint">Das Projekt <a href="https://github.com/iptv-org/iptv" target="_blank" rel="noopener">iptv-org</a> pflegt frei zugängliche Sender aus aller Welt. Wähle ein Land oder mehrere aus:</p>
+      <div id="countries" class="chips"></div>
+      <button id="applyCountries" class="primary">Übernehmen und Sender laden</button>
+    </details>
   </section>
 
   <section class="card">
@@ -135,6 +148,24 @@ li:first-child { border-top: 0; }
   var saveTimer = null;
   var toastTimer = null;
   var loadingState = false;
+
+  // Frei zugaengliche Senderlisten von iptv-org, nach Land
+  var IPTV_BASE = 'https://iptv-org.github.io/iptv/countries/';
+  var IPTV_LINE = /^https?:\/\/iptv-org\.github\.io\/iptv\/countries\/([a-z]{2})\.m3u$/i;
+  var COUNTRIES = [
+    ['de', 'Deutschland'], ['at', 'Österreich'], ['ch', 'Schweiz'],
+    ['al', 'Albanien'], ['be', 'Belgien'], ['ba', 'Bosnien und Herzegowina'], ['bg', 'Bulgarien'],
+    ['dk', 'Dänemark'], ['ee', 'Estland'], ['fi', 'Finnland'], ['fr', 'Frankreich'],
+    ['gr', 'Griechenland'], ['uk', 'Großbritannien'], ['ie', 'Irland'], ['is', 'Island'],
+    ['it', 'Italien'], ['ca', 'Kanada'], ['xk', 'Kosovo'], ['hr', 'Kroatien'], ['lv', 'Lettland'],
+    ['lt', 'Litauen'], ['lu', 'Luxemburg'], ['md', 'Moldau'], ['me', 'Montenegro'],
+    ['nl', 'Niederlande'], ['mk', 'Nordmazedonien'], ['no', 'Norwegen'], ['pl', 'Polen'],
+    ['pt', 'Portugal'], ['ro', 'Rumänien'], ['ru', 'Russland'], ['se', 'Schweden'],
+    ['rs', 'Serbien'], ['sk', 'Slowakei'], ['si', 'Slowenien'], ['es', 'Spanien'],
+    ['cz', 'Tschechien'], ['tr', 'Türkei'], ['ua', 'Ukraine'], ['hu', 'Ungarn'], ['us', 'USA']
+  ];
+  var picked = new Set();
+  var pickedDirty = false;
 
   function api(path, body) {
     var opt = {};
@@ -327,7 +358,62 @@ li:first-child { border-top: 0; }
     }).catch(function () { toast('Fernseher nicht erreichbar'); });
   }
 
-  $('saveSources').onclick = function () {
+  // ---- Tipp: Laender von iptv-org ----
+
+  function sourceLines() {
+    return $('sources').value.split('\n').map(function (l) { return l.trim(); })
+      .filter(function (l) { return l; });
+  }
+
+  // Uebernimmt in die Auswahl, welche Laender schon im Feld stehen
+  function syncPicked() {
+    if (pickedDirty) return;
+    picked = new Set();
+    sourceLines().forEach(function (l) {
+      var m = IPTV_LINE.exec(l);
+      if (m) picked.add(m[1].toLowerCase());
+    });
+    renderCountries();
+  }
+
+  function renderCountries() {
+    var box = $('countries');
+    box.textContent = '';
+    COUNTRIES.forEach(function (c) {
+      var on = picked.has(c[0]);
+      var b = el('button', 'chip' + (on ? ' on' : ''), (on ? '✓ ' : '') + c[1]);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      b.onclick = function () {
+        if (picked.has(c[0])) picked.delete(c[0]); else picked.add(c[0]);
+        pickedDirty = true;
+        renderCountries();
+      };
+      box.appendChild(b);
+    });
+  }
+
+  $('applyCountries').onclick = function () {
+    var text = $('sources').value;
+    var lines;
+    if (/#EXTINF/i.test(text) || /^\s*#EXTM3U/i.test(text)) {
+      if (!picked.size) { toast('Bitte mindestens ein Land auswählen'); return; }
+      if (!confirm('Die eingefügte Playlist wird durch die ausgewählten Länder ersetzt. Fortfahren?')) return;
+      lines = [];
+    } else {
+      // Eigene Links bleiben stehen, nur die Laender-Zeilen werden neu gesetzt
+      lines = sourceLines().filter(function (l) { return !IPTV_LINE.test(l); });
+    }
+    COUNTRIES.forEach(function (c) {
+      if (picked.has(c[0])) lines.push(IPTV_BASE + c[0] + '.m3u');
+    });
+    if (!lines.length) { toast('Bitte mindestens ein Land auswählen'); return; }
+    $('sources').value = lines.join('\n');
+    pickedDirty = false;
+    saveSources();
+  };
+
+  function saveSources() {
     var text = $('sources').value.trim();
     if (!text) { toast('Bitte zuerst einen M3U-Link oder eine Playlist einfügen'); return; }
     api('/api/sources', text).then(function () {
@@ -335,7 +421,9 @@ li:first-child { border-top: 0; }
       toast('Gespeichert – Sender werden geladen …');
       poll();
     }).catch(function () { toast('Fernseher nicht erreichbar'); });
-  };
+  }
+
+  $('saveSources').onclick = saveSources;
 
   $('reload').onclick = function () {
     api('/api/reload', '').then(function () { toast('Senderliste wird neu geladen …'); poll(); })
@@ -383,6 +471,7 @@ li:first-child { border-top: 0; }
       if (!savePending) setFavs(st.favorites);
       var box = $('sources');
       if (!sourcesDirty && document.activeElement !== box) box.value = st.sources;
+      syncPicked();
       current = st.current;
       showStatus(st);
       renderAll();
@@ -402,6 +491,7 @@ li:first-child { border-top: 0; }
     }).catch(offline);
   }
 
+  renderCountries();
   loadState();
   setInterval(poll, 2500);
 })();

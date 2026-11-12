@@ -44,18 +44,9 @@ Die ausführliche Schritt-für-Schritt-Anleitung steht in [ANLEITUNG.md](ANLEITU
 
 ## Wo bekomme ich eine Senderliste?
 
-Oma TV bringt keine Sender mit. Diese Projekte auf GitHub sammeln und pflegen frei zugängliche
-Sender, die Links kannst du direkt in Oma TV einfügen:
-
-| Projekt | Was drin ist | Link zum Einfügen |
-|---|---|---|
-| [iptv-org/iptv](https://github.com/iptv-org/iptv) | die größte Sammlung öffentlich zugänglicher Sender weltweit, täglich aktualisiert | Deutschland: `https://iptv-org.github.io/iptv/countries/de.m3u`<br>Österreich: `https://iptv-org.github.io/iptv/countries/at.m3u`<br>Schweiz: `https://iptv-org.github.io/iptv/countries/ch.m3u`<br>alles auf Deutsch: `https://iptv-org.github.io/iptv/languages/deu.m3u` |
-| [Free-TV/IPTV](https://github.com/Free-TV/IPTV) | kleinere, handverlesene Liste kostenloser Sender | Deutschland: `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_germany.m3u8` |
-| [jnk22/kodinerds-iptv](https://github.com/jnk22/kodinerds-iptv) | deutsche Sender, vor allem die Öffentlich-Rechtlichen | `https://raw.githubusercontent.com/jnk22/kodinerds-iptv/master/iptv/clean/clean_tv.m3u` |
-
-Weitere Länder und Sprachen stehen in den jeweiligen Projekten. Die Listen gehören nicht zu Oma TV
-und werden von Freiwilligen gepflegt: einzelne Sender können ausfallen oder nur in bestimmten
-Ländern laufen. Wähle auf der Einrichtungsseite einfach die Sender aus, die bei dir funktionieren.
+Oma TV bringt keine Sender mit. Wer keinen eigenen M3U-Link hat, nimmt die frei zugänglichen
+Sender von [iptv-org/iptv](https://github.com/iptv-org/iptv): auf der Einrichtungsseite unter
+**Tipp: Noch keine Senderliste?** ein Land oder mehrere antippen und übernehmen.
 
 ## Bedienung
 
