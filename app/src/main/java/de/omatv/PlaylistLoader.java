@@ -181,7 +181,6 @@ public final class PlaylistLoader {
     /** Oeffnet die Verbindung und folgt Weiterleitungen, auch von http nach https. */
     private static URLConnection open(String address, String userAgent) throws IOException {
         String current = address;
-        boolean triedPlain = false;
         for (int hop = 0; hop < 6; hop++) {
             URL url = new URL(current);
             URLConnection con = url.openConnection();
@@ -192,21 +191,7 @@ public final class PlaylistLoader {
             http.setInstanceFollowRedirects(false);
             http.setRequestProperty("User-Agent", userAgent);
             http.setRequestProperty("Accept", "*/*");
-            int code;
-            try {
-                code = http.getResponseCode();
-            } catch (javax.net.ssl.SSLException e) {
-                http.disconnect();
-                // Manche Anbieter nennen einen https-Link, obwohl der Server auf diesem Port nur
-                // unverschluesselt antwortet ("Unable to parse TLS packet header"). Dann einmal
-                // dieselbe Adresse mit http versuchen.
-                if (!triedPlain && current.regionMatches(true, 0, "https://", 0, 8)) {
-                    triedPlain = true;
-                    current = "http://" + current.substring(8);
-                    continue;
-                }
-                throw e;
-            }
+            int code = http.getResponseCode();
             if (code >= 300 && code < 400) {
                 String location = http.getHeaderField("Location");
                 http.disconnect();
@@ -331,7 +316,7 @@ public final class PlaylistLoader {
         if (e instanceof java.net.SocketTimeoutException) return "Server antwortet nicht (Zeitüberschreitung)";
         if (e instanceof java.net.ConnectException) return "Verbindung abgelehnt";
         if (e instanceof java.net.MalformedURLException) return "Das ist keine gültige Adresse";
-        if (e instanceof javax.net.ssl.SSLException) return "Sichere Verbindung (https) fehlgeschlagen";
+        if (e instanceof javax.net.ssl.SSLException) return "Sichere Verbindung (https) fehlgeschlagen – bietet der Server https an?";
         String m = e.getMessage();
         return m == null || m.isEmpty() ? e.getClass().getSimpleName() : m;
     }
