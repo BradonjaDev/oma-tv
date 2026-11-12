@@ -1,8 +1,14 @@
 package de.omatv;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.UiModeManager;
+import android.content.ClipboardManager;
+import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.net.Uri;
@@ -10,16 +16,25 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.text.InputType;
 import android.text.TextUtils;
+import android.util.DisplayMetrics;
 import android.util.TypedValue;
+import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.SurfaceView;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.media3.common.AudioAttributes;
 import androidx.media3.common.MediaItem;
@@ -130,7 +145,21 @@ public class MainActivity extends Activity implements SetupServer.Backend {
     private TextView listFooter;
     private boolean listOpen;
     private int listSel;
+    private int listTop;
     private final StringBuilder digits = new StringBuilder();
+
+    // Geraet und Groesse: am Fernseher scale = 1 (alles unveraendert), am Handy/Tablet kleiner.
+    private boolean isTv;
+    private float scale = 1f;
+    private ScrollView setupScroll;
+
+    // Touch-Bedienung (nur fuer Handy/Tablet relevant; eine Fernbedienung loest das nie aus)
+    private GestureDetector gesture;
+    private GestureDetector listGesture;
+    private int touchSlop;
+    private volatile int serverPort;
+
+    private static final int DIALOG_THEME = android.R.style.Theme_DeviceDefault_Dialog_Alert;
 
     // ------------------------------------------------------------------ Lebenszyklus
 
@@ -143,6 +172,7 @@ public class MainActivity extends Activity implements SetupServer.Backend {
         currentKey = prefs.getString(KEY_LAST, "");
         cacheFile = new File(getFilesDir(), "sender.tsv");
         pageHtml = readAsset("setup.html");
+        detectDeviceAndScale();
         buildUi();
         updateMode();
 
@@ -177,7 +207,7 @@ public class MainActivity extends Activity implements SetupServer.Backend {
     protected void onStart() {
         super.onStart();
         started = true;
-        startServer();
+        if (server == null) startServer();
         createPlayer();
         updateMode();
         if (current != null) {
@@ -207,26 +237,67 @@ public class MainActivity extends Activity implements SetupServer.Backend {
         numberView.setVisibility(View.GONE);
         loadingView.setVisibility(View.GONE);
         releasePlayer();
-        stopServer();
+        // Der Einrichtungs-Webserver laeuft bewusst weiter: so bleibt die Seite auch dann
+        // erreichbar, wenn man auf demselben Handy kurz in den Browser wechselt.
         super.onStop();
     }
 
     @Override
     protected void onDestroy() {
         destroyed = true;
+        stopServer();
         io.shutdownNow();
         super.onDestroy();
     }
 
     // ------------------------------------------------------------------ Oberflaeche
 
+    /**
+     * Erkennt, ob die App auf einem Fernseher laeuft, und legt die Skalierung fest.
+     * Am Fernseher bleibt alles wie bisher (scale = 1). Am Handy/Tablet wird die ganze
+     * Oberflaeche anhand der kuerzesten Bildschirmseite verkleinert; die aendert sich beim
+     * Drehen nicht, darum passen Hoch- und Querformat ohne Neuaufbau.
+     */
+    private void detectDeviceAndScale() {
+        boolean tv = false;
+        try {
+            UiModeManager um = (UiModeManager) getSystemService(Context.UI_MODE_SERVICE);
+            if (um != null && um.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION) tv = true;
+        } catch (Exception ignored) {
+        }
+        if (!tv) {
+            try {
+                if (getPackageManager().hasSystemFeature("android.software.leanback")) tv = true;
+            } catch (Exception ignored) {
+            }
+        }
+        isTv = tv;
+        if (isTv) {
+            scale = 1f;
+            return;
+        }
+        DisplayMetrics m = getResources().getDisplayMetrics();
+        float shortestDp = Math.min(m.widthPixels, m.heightPixels) / m.density;
+        float s = shortestDp / 540f; // 540dp entspricht etwa der kurzen Seite eines 1080p-Fernsehers
+        if (s < 0.6f) s = 0.6f;
+        if (s > 1.1f) s = 1.1f;
+        scale = s;
+    }
+
     private int dp(float value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
+        return Math.round(value * getResources().getDisplayMetrics().density * scale);
+    }
+
+    /** Breite der Senderliste: am Handy darf sie den Bildschirm nicht sprengen. */
+    private int listWidth() {
+        int wide = dp(470);
+        int cap = Math.round(getResources().getDisplayMetrics().widthPixels * 0.88f);
+        return Math.min(wide, cap);
     }
 
     private TextView text(float sp, int color, boolean bold) {
         TextView t = new TextView(this);
-        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
+        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp * scale);
         t.setTextColor(color);
         if (bold) t.setTypeface(Typeface.DEFAULT_BOLD);
         t.setFocusable(false);
@@ -285,10 +356,12 @@ public class MainActivity extends Activity implements SetupServer.Backend {
         numLp.rightMargin = dp(48);
         root.addView(numberView, numLp);
 
-        // Senderliste links
-        float heightDp = getResources().getDisplayMetrics().heightPixels / getResources().getDisplayMetrics().density;
-        int rowCount = Math.max(5, Math.min(9, (int) ((heightDp - 160) / 52)));
-        listBox = new LinearLayout(this);
+        // Senderliste links. Die Zeilenzahl richtet sich nach der kurzen Bildschirmseite,
+        // damit die Liste in jeder Lage vollstaendig auf den Schirm passt.
+        DisplayMetrics lm = getResources().getDisplayMetrics();
+        float effDp = (Math.min(lm.widthPixels, lm.heightPixels) / lm.density) / scale;
+        int rowCount = Math.max(5, Math.min(9, (int) ((effDp - 160) / 52)));
+        listBox = new TouchListBox(this);
         listBox.setOrientation(LinearLayout.VERTICAL);
         listBox.setBackgroundColor(0xEE101820);
         listBox.setPadding(dp(32), dp(22), dp(20), dp(18));
@@ -299,9 +372,22 @@ public class MainActivity extends Activity implements SetupServer.Backend {
         listBox.addView(header, headLp);
         rows = new TextView[rowCount];
         for (int i = 0; i < rowCount; i++) {
+            final int r = i;
             TextView row = oneLine(26, WHITE, false);
             row.setGravity(Gravity.CENTER_VERTICAL);
             row.setPadding(dp(14), 0, dp(14), 0);
+            // Antippen waehlt den Sender dieser Zeile (nur Touch; am Fernseher laeuft alles ueber Tasten).
+            row.setClickable(true);
+            row.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    int ch = listTop + r;
+                    if (ch >= 0 && ch < visible.size()) {
+                        listSel = ch;
+                        chooseFromList();
+                    }
+                }
+            });
             rows[i] = row;
             listBox.addView(row, new LinearLayout.LayoutParams(MATCH, dp(52)));
         }
@@ -310,7 +396,7 @@ public class MainActivity extends Activity implements SetupServer.Backend {
         footLp.topMargin = dp(10);
         listBox.addView(listFooter, footLp);
         listBox.setVisibility(View.GONE);
-        root.addView(listBox, new FrameLayout.LayoutParams(dp(470), MATCH, Gravity.LEFT));
+        root.addView(listBox, new FrameLayout.LayoutParams(listWidth(), MATCH, Gravity.LEFT));
 
         // Einrichtungsbild (solange es noch keine Sender gibt)
         setupBox = new LinearLayout(this);
@@ -341,16 +427,45 @@ public class MainActivity extends Activity implements SetupServer.Backend {
         LinearLayout.LayoutParams statLp = new LinearLayout.LayoutParams(MATCH, WRAP);
         statLp.topMargin = dp(34);
         setupBox.addView(setupStatus, statLp);
-        setupBox.setVisibility(View.GONE);
-        root.addView(setupBox, new FrameLayout.LayoutParams(MATCH, MATCH));
+        if (!isTv) {
+            TextView phoneHint = text(20, GREY, false);
+            phoneHint.setText("Auf diesem Gerät: lange auf das Bild tippen öffnet die Einstellungen "
+                    + "(M3U-Link eingeben, Sender auswählen).");
+            LinearLayout.LayoutParams phoneLp = new LinearLayout.LayoutParams(MATCH, WRAP);
+            phoneLp.topMargin = dp(20);
+            setupBox.addView(phoneHint, phoneLp);
+        }
+
+        // Der Inhalt kann auf kleinen/gedrehten Bildschirmen hoeher als der Schirm sein.
+        // In einem ScrollView wird er dann scrollbar, statt abgeschnitten zu werden.
+        setupScroll = new ScrollView(this);
+        setupScroll.setFillViewport(true);
+        setupScroll.setBackgroundColor(0xFF0D1B2A);
+        setupScroll.addView(setupBox, new FrameLayout.LayoutParams(MATCH, MATCH));
+        setupScroll.setVisibility(View.GONE);
+        root.addView(setupScroll, new FrameLayout.LayoutParams(MATCH, MATCH));
 
         setContentView(root);
+
+        // Touch-Bedienung einrichten (eine Fernbedienung erzeugt keine Touch-Ereignisse).
+        touchSlop = ViewConfiguration.get(this).getScaledTouchSlop();
+        gesture = new GestureDetector(this, rootGesture);
+        listGesture = new GestureDetector(this, listGestureListener);
+
+        // Beim Drehen aendert sich die Bildgroesse: das Video neu einpassen.
+        root.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+            @Override
+            public void onLayoutChange(View v, int l, int t, int r, int b,
+                                       int ol, int ot, int or, int ob) {
+                if (l != ol || t != ot || r != or || b != ob) fitVideo();
+            }
+        });
     }
 
     /** Zeigt je nach Zustand das Einrichtungsbild oder das Fernsehbild. */
     private void updateMode() {
         boolean empty = visible.isEmpty();
-        setupBox.setVisibility(empty && cacheLoaded ? View.VISIBLE : View.GONE);
+        setupScroll.setVisibility(empty && cacheLoaded ? View.VISIBLE : View.GONE);
         if (empty) {
             closeList();
             banner.setVisibility(View.GONE);
@@ -630,6 +745,7 @@ public class MainActivity extends Activity implements SetupServer.Backend {
         int top = listSel - rows.length / 2;
         if (top > n - rows.length) top = n - rows.length;
         if (top < 0) top = 0;
+        listTop = top;
         for (int r = 0; r < rows.length; r++) {
             int i = top + r;
             TextView row = rows[r];
@@ -955,6 +1071,7 @@ public class MainActivity extends Activity implements SetupServer.Backend {
                 String found = "";
                 try {
                     int port = s.start();
+                    serverPort = port;
                     String ip = findLocalIp();
                     if (ip != null) found = "http://" + ip + ":" + port;
                 } catch (Exception ignored) {
@@ -997,6 +1114,7 @@ public class MainActivity extends Activity implements SetupServer.Backend {
                         String found = "";
                         try {
                             int port = s.start();
+                            serverPort = port;
                             String ip = findLocalIp();
                             if (ip != null) found = "http://" + ip + ":" + port;
                         } catch (Exception ignored) {
@@ -1028,8 +1146,9 @@ public class MainActivity extends Activity implements SetupServer.Backend {
                 while (addresses.hasMoreElements()) {
                     InetAddress a = addresses.nextElement();
                     if (!(a instanceof Inet4Address) || a.isLoopbackAddress()) continue;
-                    String name = nif.getName() == null ? "" : nif.getName();
-                    if (a.isSiteLocalAddress() && (name.startsWith("wlan") || name.startsWith("eth"))) {
+                    String name = nif.getName() == null ? "" : nif.getName().toLowerCase(Locale.ROOT);
+                    if (a.isSiteLocalAddress() && (name.startsWith("wlan") || name.startsWith("eth")
+                            || name.startsWith("wifi") || name.startsWith("ap") || name.startsWith("en"))) {
                         return a.getHostAddress();
                     }
                     if (fallback == null || a.isSiteLocalAddress()) fallback = a.getHostAddress();
@@ -1067,6 +1186,237 @@ public class MainActivity extends Activity implements SetupServer.Backend {
             if (!p.isEmpty()) out.add(p);
         }
         return out;
+    }
+
+    // ------------------------------------------------------------------ Touch-Bedienung (Handy/Tablet)
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        if (gesture != null && gesture.onTouchEvent(event)) return true;
+        return super.onTouchEvent(event);
+    }
+
+    /** Wischen/Tippen auf dem Fernsehbild: oben/unten umschalten, Mitte oeffnet die Senderliste. */
+    private final GestureDetector.SimpleOnGestureListener rootGesture = new GestureDetector.SimpleOnGestureListener() {
+        @Override
+        public boolean onDown(MotionEvent e) {
+            return true;
+        }
+
+        @Override
+        public boolean onSingleTapUp(MotionEvent e) {
+            if (visible.isEmpty()) return false;
+            if (listOpen) {
+                closeList();
+                return true;
+            }
+            int h = root.getHeight();
+            float y = e.getY();
+            if (h > 0 && y < h * 0.22f) step(1);          // oben tippen: naechster Sender
+            else if (h > 0 && y > h * 0.78f) step(-1);    // unten tippen: vorheriger Sender
+            else openList();                               // Mitte: Senderliste
+            return true;
+        }
+
+        @Override
+        public boolean onFling(MotionEvent e1, MotionEvent e2, float vx, float vy) {
+            if (visible.isEmpty() || listOpen) return false;
+            if (Math.abs(vy) > Math.abs(vx) && Math.abs(vy) > 200) {
+                step(vy < 0 ? 1 : -1); // nach oben wischen = naechster Sender
+                return true;
+            }
+            return false;
+        }
+
+        @Override
+        public void onLongPress(MotionEvent e) {
+            if (listOpen) return;
+            openSettingsMenu();
+        }
+    };
+
+    /** Innerhalb der offenen Senderliste: ein vertikaler Wisch scrollt (blaettert) durch die Liste. */
+    private final GestureDetector.SimpleOnGestureListener listGestureListener = new GestureDetector.SimpleOnGestureListener() {
+        @Override
+        public boolean onDown(MotionEvent e) {
+            return true;
+        }
+
+        @Override
+        public boolean onFling(MotionEvent e1, MotionEvent e2, float vx, float vy) {
+            if (Math.abs(vy) > Math.abs(vx)) {
+                int page = Math.max(1, rows.length - 1);
+                moveList(vy < 0 ? page : -page, false); // nach oben wischen = weiter nach unten in der Liste
+                return true;
+            }
+            return false;
+        }
+    };
+
+    /**
+     * Senderliste mit Touch: ein klarer vertikaler Wisch wird abgefangen und scrollt die Liste,
+     * ein kurzes Tippen erreicht die Zeile darunter (die ihren eigenen OnClickListener hat).
+     */
+    private final class TouchListBox extends LinearLayout {
+        private float downY;
+        private boolean scrolling;
+
+        TouchListBox(Context c) {
+            super(c);
+        }
+
+        @Override
+        public boolean onInterceptTouchEvent(MotionEvent e) {
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    downY = e.getY();
+                    scrolling = false;
+                    if (listGesture != null) listGesture.onTouchEvent(e);
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    if (!scrolling && Math.abs(e.getY() - downY) > touchSlop) {
+                        scrolling = true;
+                        return true;
+                    }
+                    break;
+                default:
+                    break;
+            }
+            return false;
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent e) {
+            if (listGesture != null) listGesture.onTouchEvent(e);
+            keepListOpen();
+            return true;
+        }
+    }
+
+    // ------------------------------------------------------------------ Einstellungen am Handy
+
+    private void toast(String message) {
+        try {
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** Kleines Menue (per langem Druecken), um die App direkt am Handy einzurichten. */
+    private void openSettingsMenu() {
+        final String[] items = {
+                "M3U-Link eingeben",
+                "Sender auswählen (Einrichtungsseite)",
+                "Senderliste neu laden",
+                "Autostart erlauben"
+        };
+        try {
+            new AlertDialog.Builder(this, DIALOG_THEME)
+                    .setTitle("Oma TV einrichten")
+                    .setItems(items, new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface d, int which) {
+                            switch (which) {
+                                case 0:
+                                    showSourcesDialog();
+                                    break;
+                                case 1:
+                                    openSetupPage();
+                                    break;
+                                case 2:
+                                    refresh();
+                                    toast("Senderliste wird neu geladen …");
+                                    break;
+                                case 3:
+                                    requestAutostart();
+                                    break;
+                                default:
+                                    break;
+                            }
+                        }
+                    })
+                    .setNegativeButton("Schließen", null)
+                    .show();
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** Dialog mit Textfeld und Einfuegen-Knopf, um den M3U-Link direkt in der App einzutragen. */
+    private void showSourcesDialog() {
+        final EditText edit = new EditText(this);
+        edit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        edit.setHint("http://…");
+        edit.setText(sources);
+        edit.setSelection(edit.getText().length());
+        FrameLayout wrap = new FrameLayout(this);
+        int pad = Math.round(16 * getResources().getDisplayMetrics().density);
+        wrap.setPadding(pad, pad / 2, pad, 0);
+        wrap.addView(edit, new FrameLayout.LayoutParams(MATCH, WRAP));
+        try {
+            final AlertDialog dlg = new AlertDialog.Builder(this, DIALOG_THEME)
+                    .setTitle("M3U-Link eingeben")
+                    .setMessage("Ein Link pro Zeile. Danach werden die Sender geladen.")
+                    .setView(wrap)
+                    .setPositiveButton("Speichern", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface d, int which) {
+                            String text = edit.getText().toString().replace("\r", "").trim();
+                            if (text.isEmpty()) {
+                                toast("Bitte zuerst einen M3U-Link einfügen");
+                                return;
+                            }
+                            setSources(text);
+                            toast("Gespeichert – Sender werden geladen …");
+                        }
+                    })
+                    .setNeutralButton("Einfügen", null)
+                    .setNegativeButton("Abbrechen", null)
+                    .create();
+            dlg.show();
+            // Der Einfuegen-Knopf soll den Dialog NICHT schliessen, nur den Text aus der Zwischenablage holen.
+            Button paste = dlg.getButton(AlertDialog.BUTTON_NEUTRAL);
+            if (paste != null) {
+                paste.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        CharSequence clip = clipboardText();
+                        if (clip != null && clip.length() > 0) {
+                            edit.setText(clip.toString().trim());
+                            edit.setSelection(edit.getText().length());
+                            toast("Eingefügt");
+                        } else {
+                            toast("Zwischenablage ist leer");
+                        }
+                    }
+                });
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private CharSequence clipboardText() {
+        try {
+            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cm != null && cm.hasPrimaryClip() && cm.getPrimaryClip().getItemCount() > 0) {
+                return cm.getPrimaryClip().getItemAt(0).coerceToText(this);
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    /** Oeffnet die Einrichtungsseite im Browser – auf demselben Handy ueber die lokale Adresse. */
+    private void openSetupPage() {
+        int port = serverPort > 0 ? serverPort : 8080;
+        String local = "http://127.0.0.1:" + port + "/";
+        try {
+            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(local));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+        } catch (Exception e) {
+            if (!address.isEmpty()) toast("Im Browser öffnen: " + address);
+            else toast("Kein Browser gefunden");
+        }
     }
 
     // ---- SetupServer.Backend: wird aus Server-Threads aufgerufen ----
