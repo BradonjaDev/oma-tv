@@ -1,0 +1,53 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'de.omatv'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'de.omatv'
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+    }
+
+    // Fester Schluessel, damit sich spaetere Versionen ueber die alte installieren lassen
+    // (Einstellungen bleiben erhalten). Fuer eine private App voellig ausreichend.
+    signingConfigs {
+        oma {
+            storeFile rootProject.file('oma-tv.keystore')
+            storePassword 'omatv-privat'
+            keyAlias 'omatv'
+            keyPassword 'omatv-privat'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.oma
+        }
+        debug {
+            signingConfig signingConfigs.oma
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
+
+dependencies {
+    implementation 'androidx.media3:media3-exoplayer:1.5.1'
+    implementation 'androidx.media3:media3-exoplayer-hls:1.5.1'
+    implementation 'androidx.media3:media3-exoplayer-dash:1.5.1'
+}

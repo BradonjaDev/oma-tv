@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oma TV einrichten</title>
+<style>
+:root {
+  --bg: #f3efe7; --card: #ffffff; --ink: #1d1c1a; --muted: #6b675f; --line: #e2dccf;
+  --accent: #0b6b68; --accent-ink: #ffffff; --soft: #e4f1ef; --warn: #a23a1c; --ok: #1f7a3d;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111314; --card: #1c1f21; --ink: #ecebe7; --muted: #a09c93; --line: #2e3235;
+    --accent: #58c9bd; --accent-ink: #06201e; --soft: #17302e; --warn: #f08a66; --ok: #6fd08c;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+header {
+  position: sticky; top: 0; z-index: 5; background: var(--bg);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 16px; border-bottom: 1px solid var(--line);
+}
+h1 { font-size: 20px; margin: 0; letter-spacing: .01em; }
+.pill { font-size: 13px; padding: 4px 10px; border-radius: 999px; background: var(--line); color: var(--muted); white-space: nowrap; }
+.pill.on { background: var(--soft); color: var(--ok); }
+.pill.off { color: var(--warn); }
+main { max-width: 640px; margin: 0 auto; padding: 12px 16px 96px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 0 0 14px; }
+h2 { font-size: 17px; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+.step {
+  flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink);
+  display: inline-flex; align-items: center; justify-content: center; font-size: 14px;
+}
+.count { color: var(--muted); font-weight: 400; font-size: 15px; }
+.hint { color: var(--muted); font-size: 14px; margin: 0 0 10px; }
+code { background: var(--soft); padding: 1px 5px; border-radius: 5px; font-size: 13px; }
+textarea, input[type=search], select {
+  width: 100%; font: inherit; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; margin: 0 0 10px;
+}
+textarea { resize: vertical; min-height: 84px; font-size: 14px; word-break: break-all; }
+textarea:focus, input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+button {
+  font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 10px; min-height: 44px; padding: 8px 14px; cursor: pointer;
+}
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; flex: 1 1 auto; }
+button:active { transform: translateY(1px); }
+.status { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
+.status.err { color: var(--warn); }
+ol, ul { list-style: none; margin: 0; padding: 0; }
+li { display: flex; align-items: center; gap: 6px; border-top: 1px solid var(--line); min-height: 52px; }
+li:first-child { border-top: 0; }
+.num { flex: none; width: 34px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.name {
+  flex: 1 1 auto; min-width: 0; text-align: left; border: 0; background: none; padding: 8px 4px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.name small { display: block; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+.name.gone { color: var(--muted); text-decoration: line-through; }
+.playing .name { color: var(--accent); font-weight: 600; }
+.icon { flex: none; width: 44px; padding: 0; font-size: 17px; }
+.icon.add { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-size: 22px; }
+.icon.added { background: var(--soft); color: var(--ok); border-color: var(--soft); }
+.icon:disabled { opacity: .35; }
+#toast {
+  position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); max-width: calc(100% - 32px);
+  background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 14px;
+  opacity: 0; pointer-events: none; transition: opacity .2s;
+}
+#toast.show { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { #toast { transition: none; } button:active { transform: none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Oma TV</h1>
+  <div id="conn" class="pill">Verbinde …</div>
+</header>
+<main>
+  <section class="card">
+    <h2><span class="step">1</span>M3U-Link</h2>
+    <p class="hint">Ein Link pro Zeile. Ist ein Link nur ein einzelner Sender, kannst du den Namen davor schreiben, z. B. <code>ZDF https://…</code></p>
+    <textarea id="sources" rows="3" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="http://…" aria-label="M3U-Links"></textarea>
+    <div class="row">
+      <button id="saveSources" class="primary">Speichern und Sender laden</button>
+      <button id="reload">Neu laden</button>
+    </div>
+    <p id="status" class="status" role="status"></p>
+  </section>
+
+  <section class="card">
+    <h2><span class="step">2</span>Omas Sender <span id="favCount" class="count"></span></h2>
+    <p id="favHint" class="hint"></p>
+    <ol id="favs"></ol>
+  </section>
+
+  <section class="card">
+    <h2><span class="step">3</span>Sender hinzufügen</h2>
+    <input id="search" type="search" placeholder="Sender suchen …" autocomplete="off" aria-label="Sender suchen">
+    <select id="group" aria-label="Gruppe"></select>
+    <p id="resultInfo" class="hint"></p>
+    <ul id="results"></ul>
+  </section>
+
+  <section class="card">
+    <h2>Autostart</h2>
+    <p id="autoText" class="hint"></p>
+    <button id="autoBtn">Auf dem Fernseher erlauben</button>
+  </section>
+</main>
+<div id="toast" role="status"></div>
+
+<script>
+(function () {
+  'use strict';
+  var MAX_RESULTS = 150;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var all = [];              // [{k, n, g, l}]
+  var byKey = new Map();
+  var favs = [];             // Schluessel in Omas Reihenfolge
+  var favSet = new Set();
+  var listRev = -1;
+  var current = '';
+  var sourcesDirty = false;
+  var savePending = false;
+  var saveTimer = null;
+  var toastTimer = null;
+  var loadingState = false;
+
+  function api(path, body) {
+    var opt = {};
+    if (body !== undefined) {
+      opt = { method: 'POST', headers: { 'X-Oma-TV': '1', 'Content-Type': 'text/plain; charset=utf-8' }, body: body };
+    }
+    return fetch(path, opt).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    });
+  }
+
+  function toast(text) {
+    var t = $('toast');
+    t.textContent = text;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2600);
+  }
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  function setFavs(keys) {
+    favs = keys.slice();
+    favSet = new Set(favs);
+  }
+
+  // ---- Anzeige ----
+
+  function renderFavs() {
+    var box = $('favs');
+    box.textContent = '';
+    $('favCount').textContent = favs.length ? '(' + favs.length + ')' : '';
+    $('favHint').textContent = favs.length
+      ? 'Das sieht Oma, in dieser Reihenfolge. Tippe auf einen Namen, um ihn am Fernseher zu testen.'
+      : (all.length
+        ? 'Noch keine Auswahl: Oma sieht alle ' + all.length + ' Sender der Liste. Wähle unten mit + ihre Sender aus.'
+        : 'Sobald eine Senderliste geladen ist, kannst du hier Omas Sender auswählen.');
+    favs.forEach(function (key, i) {
+      var ch = byKey.get(key);
+      var li = el('li', key === current ? 'playing' : '');
+      li.appendChild(el('span', 'num', String(i + 1)));
+      var name = el('button', 'name' + (ch ? '' : ' gone'), ch ? ch.n : key);
+      name.type = 'button';
+      if (ch) {
+        name.title = 'Am Fernseher abspielen';
+        name.onclick = function () { play(key); };
+      } else {
+        name.title = 'Nicht mehr in der Senderliste';
+        name.disabled = true;
+      }
+      li.appendChild(name);
+      var up = el('button', 'icon', '▲');
+      up.type = 'button';
+      up.setAttribute('aria-label', 'Nach oben');
+      up.disabled = i === 0;
+      up.onclick = function () { move(i, -1); };
+      var down = el('button', 'icon', '▼');
+      down.type = 'button';
+      down.setAttribute('aria-label', 'Nach unten');
+      down.disabled = i === favs.length - 1;
+      down.onclick = function () { move(i, 1); };
+      var del = el('button', 'icon', '✕');
+      del.type = 'button';
+      del.setAttribute('aria-label', 'Entfernen');
+      del.onclick = function () { toggle(key); };
+      li.appendChild(up);
+      li.appendChild(down);
+      li.appendChild(del);
+      box.appendChild(li);
+    });
+  }
+
+  function renderGroups() {
+    var sel = $('group');
+    var keep = sel.value;
+    var seen = new Set();
+    var groups = [];
+    all.forEach(function (c) {
+      if (c.g && !seen.has(c.g)) { seen.add(c.g); groups.push(c.g); }
+    });
+    sel.textContent = '';
+    var first = el('option', '', 'Alle Gruppen');
+    first.value = '';
+    sel.appendChild(first);
+    groups.forEach(function (g) {
+      var o = el('option', '', g);
+      o.value = g;
+      sel.appendChild(o);
+    });
+    sel.value = seen.has(keep) ? keep : '';
+    sel.style.display = groups.length > 1 ? '' : 'none';
+  }
+
+  function renderResults() {
+    var box = $('results');
+    box.textContent = '';
+    var term = $('search').value.trim().toLowerCase();
+    var group = $('group').value;
+    var shown = 0;
+    var total = 0;
+    for (var i = 0; i < all.length; i++) {
+      var c = all[i];
+      if (group && c.g !== group) continue;
+      if (term && c.l.indexOf(term) < 0) continue;
+      total++;
+      if (shown >= MAX_RESULTS) continue;
+      shown++;
+      box.appendChild(resultRow(c));
+    }
+    var info = $('resultInfo');
+    if (!all.length) info.textContent = 'Noch keine Senderliste geladen.';
+    else if (!total) info.textContent = 'Kein Sender gefunden.';
+    else if (total > shown) info.textContent = total + ' Sender gefunden, ' + shown + ' angezeigt. Suche eingrenzen, um mehr zu sehen.';
+    else info.textContent = total + ' Sender';
+  }
+
+  function resultRow(c) {
+    var li = el('li', c.k === current ? 'playing' : '');
+    var name = el('button', 'name', c.n);
+    name.type = 'button';
+    name.title = 'Am Fernseher abspielen';
+    if (c.g) name.appendChild(el('small', '', c.g));
+    name.onclick = function () { play(c.k); };
+    var inFav = favSet.has(c.k);
+    var btn = el('button', 'icon ' + (inFav ? 'added' : 'add'), inFav ? '✓' : '+');
+    btn.type = 'button';
+    btn.setAttribute('aria-label', inFav ? 'Aus Omas Sendern entfernen' : 'Zu Omas Sendern hinzufügen');
+    btn.onclick = function () { toggle(c.k); };
+    li.appendChild(name);
+    li.appendChild(btn);
+    return li;
+  }
+
+  function renderAll() {
+    renderFavs();
+    renderGroups();
+    renderResults();
+  }
+
+  // ---- Aktionen ----
+
+  function toggle(key) {
+    var i = favs.indexOf(key);
+    if (i >= 0) favs.splice(i, 1); else favs.push(key);
+    favSet = new Set(favs);
+    renderFavs();
+    renderResults();
+    scheduleSave();
+  }
+
+  function move(i, delta) {
+    var j = i + delta;
+    if (j < 0 || j >= favs.length) return;
+    var tmp = favs[i];
+    favs[i] = favs[j];
+    favs[j] = tmp;
+    renderFavs();
+    scheduleSave();
+  }
+
+  function scheduleSave() {
+    savePending = true;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveFavs, 500);
+  }
+
+  function saveFavs() {
+    var snapshot = favs.join('\n');
+    api('/api/favorites', snapshot).then(function () {
+      if (snapshot === favs.join('\n')) savePending = false;
+      toast('Gespeichert ✓');
+    }).catch(function () {
+      toast('Speichern fehlgeschlagen – läuft Oma TV am Fernseher?');
+      saveTimer = setTimeout(saveFavs, 3000);
+    });
+  }
+
+  function play(key) {
+    api('/api/play', key).then(function () {
+      current = key;
+      renderFavs();
+      renderResults();
+      toast('Läuft jetzt am Fernseher');
+    }).catch(function () { toast('Fernseher nicht erreichbar'); });
+  }
+
+  $('saveSources').onclick = function () {
+    var text = $('sources').value.trim();
+    if (!text) { toast('Bitte zuerst einen M3U-Link einfügen'); return; }
+    api('/api/sources', text).then(function () {
+      sourcesDirty = false;
+      toast('Gespeichert – Sender werden geladen …');
+      poll();
+    }).catch(function () { toast('Fernseher nicht erreichbar'); });
+  };
+
+  $('reload').onclick = function () {
+    api('/api/reload', '').then(function () { toast('Senderliste wird neu geladen …'); poll(); })
+      .catch(function () { toast('Fernseher nicht erreichbar'); });
+  };
+
+  $('autoBtn').onclick = function () {
+    api('/api/autostart', '').then(function () {
+      toast('Schau auf den Fernseher: bei „Oma TV“ einschalten, dann Zurück drücken.');
+    }).catch(function () { toast('Fernseher nicht erreichbar'); });
+  };
+
+  $('sources').addEventListener('input', function () { sourcesDirty = true; });
+  $('search').addEventListener('input', renderResults);
+  $('group').addEventListener('change', renderResults);
+
+  // ---- Abgleich mit dem Fernseher ----
+
+  function showStatus(st) {
+    var conn = $('conn');
+    conn.textContent = 'Verbunden ✓';
+    conn.className = 'pill on';
+    var s = $('status');
+    s.textContent = st.status || '';
+    s.className = 'status' + (/^Fehler/.test(st.status || '') ? ' err' : '');
+    $('autoText').textContent = st.autostart
+      ? 'Erlaubt ✓ – Oma TV startet von selbst, wenn der Stick neu hochfährt.'
+      : 'Optional: Damit Oma TV nach einem Neustart des Sticks von selbst startet, muss das einmal am Fernseher erlaubt werden.';
+    $('autoBtn').style.display = st.autostart ? 'none' : '';
+    if (st.current !== current) {
+      current = st.current;
+      renderFavs();
+      renderResults();
+    }
+  }
+
+  function loadState() {
+    if (loadingState) return;
+    loadingState = true;
+    api('/api/state').then(function (st) {
+      all = st.channels;
+      byKey = new Map();
+      all.forEach(function (c) { c.l = c.n.toLowerCase(); byKey.set(c.k, c); });
+      listRev = st.listRev;
+      if (!savePending) setFavs(st.favorites);
+      var box = $('sources');
+      if (!sourcesDirty && document.activeElement !== box) box.value = st.sources;
+      current = st.current;
+      showStatus(st);
+      renderAll();
+    }).catch(offline).then(function () { loadingState = false; });
+  }
+
+  function offline() {
+    var conn = $('conn');
+    conn.textContent = 'Fernseher nicht erreichbar';
+    conn.className = 'pill off';
+  }
+
+  function poll() {
+    api('/api/status').then(function (st) {
+      showStatus(st);
+      if (st.rev !== listRev) loadState();
+    }).catch(offline);
+  }
+
+  loadState();
+  setInterval(poll, 2500);
+})();
+</script>
+</body>
+</html>
