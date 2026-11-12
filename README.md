@@ -42,6 +42,21 @@ https://github.com/BradonjaDev/oma-tv/releases/latest/download/oma-tv.apk
 Auf dem TV-Stick am einfachsten mit der App **Downloader**: Adresse eintippen, installieren, fertig.
 Die ausführliche Schritt-für-Schritt-Anleitung steht in [ANLEITUNG.md](ANLEITUNG.md).
 
+## Wo bekomme ich eine Senderliste?
+
+Oma TV bringt keine Sender mit. Diese Projekte auf GitHub sammeln und pflegen frei zugängliche
+Sender, die Links kannst du direkt in Oma TV einfügen:
+
+| Projekt | Was drin ist | Link zum Einfügen |
+|---|---|---|
+| [iptv-org/iptv](https://github.com/iptv-org/iptv) | die größte Sammlung öffentlich zugänglicher Sender weltweit, täglich aktualisiert | Deutschland: `https://iptv-org.github.io/iptv/countries/de.m3u`<br>Österreich: `https://iptv-org.github.io/iptv/countries/at.m3u`<br>Schweiz: `https://iptv-org.github.io/iptv/countries/ch.m3u`<br>alles auf Deutsch: `https://iptv-org.github.io/iptv/languages/deu.m3u` |
+| [Free-TV/IPTV](https://github.com/Free-TV/IPTV) | kleinere, handverlesene Liste kostenloser Sender | Deutschland: `https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_germany.m3u8` |
+| [jnk22/kodinerds-iptv](https://github.com/jnk22/kodinerds-iptv) | deutsche Sender, vor allem die Öffentlich-Rechtlichen | `https://raw.githubusercontent.com/jnk22/kodinerds-iptv/master/iptv/clean/clean_tv.m3u` |
+
+Weitere Länder und Sprachen stehen in den jeweiligen Projekten. Die Listen gehören nicht zu Oma TV
+und werden von Freiwilligen gepflegt: einzelne Sender können ausfallen oder nur in bestimmten
+Ländern laufen. Wähle auf der Einrichtungsseite einfach die Sender aus, die bei dir funktionieren.
+
 ## Bedienung
 
 | Fernbedienung | Handy / Tablet | Was passiert |
@@ -78,6 +93,6 @@ Java ohne Kotlin und ohne AppCompat, Media3/ExoPlayer für die Wiedergabe, ab An
 
 ## Gut zu wissen
 
-- Oma TV bringt **keine Sender mit**. Du brauchst einen eigenen M3U-Link oder eine M3U-Playlist, zum Beispiel von deinem Internet- oder TV-Anbieter.
+- Oma TV bringt **keine Sender mit**. Du brauchst einen M3U-Link oder eine M3U-Playlist: von deinem Internet- oder TV-Anbieter oder aus einer der [frei zugänglichen Listen](#wo-bekomme-ich-eine-senderliste).
 - Die Einrichtungsseite kann jeder im selben WLAN öffnen, solange die App läuft.
 - Der Signaturschlüssel liegt bewusst im Repository, damit sich Updates über die installierte App installieren lassen. Für eine private App ist das unkritisch.
