@@ -83,7 +83,7 @@ public class MainActivity extends Activity implements SetupServer.Backend {
     private static final String KEY_LAST = "last";
     private static final String KEY_HINT = "touchHint";
 
-    private static final String VERSION = "1.3";
+    private static final String VERSION = "1.4";
     private static final String USER_AGENT = "OmaTV/" + VERSION + " (Android TV)";
     private static final long REFRESH_EVERY_MS = 6L * 60 * 60 * 1000;
     private static final long RETRY_REFRESH_MS = 2L * 60 * 1000;
@@ -1539,6 +1539,11 @@ public class MainActivity extends Activity implements SetupServer.Backend {
     @Override
     public String getVersion() {
         return VERSION;
+    }
+
+    @Override
+    public String getUserAgent() {
+        return USER_AGENT;
     }
 
     @Override

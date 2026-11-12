@@ -70,6 +70,11 @@ details[open] > summary.head { margin-bottom: 10px; }
 ol, ul { list-style: none; margin: 0; padding: 0; }
 li { display: flex; align-items: center; gap: 6px; border-top: 1px solid var(--line); min-height: 52px; }
 li:first-child { border-top: 0; }
+.dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--line); margin: 0 2px; }
+.dot.ok { background: var(--ok); }
+.dot.bad { background: var(--warn); }
+.legend { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.legend label { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .num { flex: none; width: 34px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
 .name {
   flex: 1 1 auto; min-width: 0; text-align: left; border: 0; background: none; padding: 8px 4px;
@@ -117,6 +122,8 @@ li:first-child { border-top: 0; }
   <section class="card">
     <h2><span class="step">2</span>Omas Sender <span id="favCount" class="count"></span></h2>
     <p id="favHint" class="hint"></p>
+    <p class="hint legend"><span class="dot ok"></span>erreichbar <span class="dot bad"></span>nicht erreichbar
+      <label><input id="checkOn" type="checkbox" checked> prüfen</label></p>
     <ol id="favs"></ol>
   </section>
 
@@ -172,6 +179,54 @@ li:first-child { border-top: 0; }
     ['rs', 'Serbien'], ['sk', 'Slowakei'], ['si', 'Slowenien'], ['es', 'Spanien'],
     ['cz', 'Tschechien'], ['tr', 'Türkei'], ['ua', 'Ukraine'], ['hu', 'Ungarn'], ['us', 'USA']
   ];
+  // Erreichbarkeit der Sender (wird vom Fernseher aus geprueft)
+  var health = new Map();     // Schluessel -> true/false
+  var asked = new Set();      // schon angefragt
+  var checkQueue = [];
+  var checkBusy = false;
+  var favDots = [];
+  var resultDots = [];
+  var checkOn = true;
+  try { checkOn = localStorage.getItem('omatvCheck') !== '0'; } catch (e) {}
+
+  function paintDot(d) {
+    var known = checkOn && health.has(d._key);
+    d.className = 'dot' + (known ? (health.get(d._key) ? ' ok' : ' bad') : '');
+    d.title = !known ? 'Noch nicht geprüft' : (health.get(d._key) ? 'Erreichbar' : 'Gerade nicht erreichbar');
+  }
+
+  function makeDot(key, list) {
+    var d = el('span', 'dot');
+    d._key = key;
+    paintDot(d);
+    list.push(d);
+    return d;
+  }
+
+  function requestCheck(keys) {
+    if (!checkOn) return;
+    keys.forEach(function (k) {
+      if (!asked.has(k)) { asked.add(k); checkQueue.push(k); }
+    });
+    pumpChecks();
+  }
+
+  function pumpChecks() {
+    if (checkBusy || !checkOn || !checkQueue.length || document.hidden) return;
+    checkBusy = true;
+    var batch = checkQueue.splice(0, 8);
+    api('/api/check', batch.join('\n')).then(function (res) {
+      Object.keys(res.r || {}).forEach(function (k) { health.set(k, res.r[k]); });
+      favDots.forEach(paintDot);
+      resultDots.forEach(paintDot);
+    }).catch(function () {
+      batch.forEach(function (k) { asked.delete(k); });
+    }).then(function () {
+      checkBusy = false;
+      setTimeout(pumpChecks, 100);
+    });
+  }
+
   var picked = new Set();
   var pickedDirty = false;
 
@@ -211,6 +266,7 @@ li:first-child { border-top: 0; }
   function renderFavs() {
     var box = $('favs');
     box.textContent = '';
+    favDots = [];
     $('favCount').textContent = favs.length ? '(' + favs.length + ')' : '';
     $('favHint').textContent = favs.length
       ? 'Das sieht Oma, in dieser Reihenfolge. Tippe auf einen Namen, um ihn am Fernseher zu testen.'
@@ -221,6 +277,7 @@ li:first-child { border-top: 0; }
       var ch = byKey.get(key);
       var li = el('li', key === current ? 'playing' : '');
       li.appendChild(el('span', 'num', String(i + 1)));
+      if (ch) li.appendChild(makeDot(key, favDots));
       var name = el('button', 'name' + (ch ? '' : ' gone'), ch ? ch.n : key);
       name.type = 'button';
       if (ch) {
@@ -250,6 +307,7 @@ li:first-child { border-top: 0; }
       li.appendChild(del);
       box.appendChild(li);
     });
+    requestCheck(favs.filter(function (k) { return byKey.has(k); }));
   }
 
   function renderGroups() {
@@ -276,6 +334,8 @@ li:first-child { border-top: 0; }
   function renderResults() {
     var box = $('results');
     box.textContent = '';
+    resultDots = [];
+    var shownKeys = [];
     var term = $('search').value.trim().toLowerCase();
     var group = $('group').value;
     var shown = 0;
@@ -287,6 +347,7 @@ li:first-child { border-top: 0; }
       total++;
       if (shown >= MAX_RESULTS) continue;
       shown++;
+      shownKeys.push(c.k);
       box.appendChild(resultRow(c));
     }
     var info = $('resultInfo');
@@ -294,6 +355,8 @@ li:first-child { border-top: 0; }
     else if (!total) info.textContent = 'Kein Sender gefunden.';
     else if (total > shown) info.textContent = total + ' Sender gefunden, ' + shown + ' angezeigt. Suche eingrenzen, um mehr zu sehen.';
     else info.textContent = total + ' Sender';
+    // Nur pruefen, was gerade zu sehen ist
+    if ($('addBox').open) requestCheck(shownKeys);
   }
 
   function resultRow(c) {
@@ -308,6 +371,7 @@ li:first-child { border-top: 0; }
     btn.type = 'button';
     btn.setAttribute('aria-label', inFav ? 'Aus Omas Sendern entfernen' : 'Zu Omas Sendern hinzufügen');
     btn.onclick = function () { toggle(c.k); };
+    li.appendChild(makeDot(c.k, resultDots));
     li.appendChild(name);
     li.appendChild(btn);
     return li;
@@ -453,6 +517,17 @@ li:first-child { border-top: 0; }
   };
 
   $('sources').addEventListener('input', function () { sourcesDirty = true; });
+  $('addBox').addEventListener('toggle', renderResults);
+  $('checkOn').checked = checkOn;
+  $('checkOn').addEventListener('change', function () {
+    checkOn = $('checkOn').checked;
+    try { localStorage.setItem('omatvCheck', checkOn ? '1' : '0'); } catch (e) {}
+    if (!checkOn) checkQueue = [];
+    asked = new Set(health.keys());
+    renderFavs();
+    renderResults();
+  });
+  document.addEventListener('visibilitychange', pumpChecks);
   $('search').addEventListener('input', renderResults);
   $('group').addEventListener('change', renderResults);
 
@@ -483,6 +558,7 @@ li:first-child { border-top: 0; }
       all = st.channels;
       byKey = new Map();
       all.forEach(function (c) { c.l = c.n.toLowerCase(); byKey.set(c.k, c); });
+      if (st.listRev !== listRev) { health = new Map(); asked = new Set(); checkQueue = []; }
       listRev = st.listRev;
       if (!savePending) setFavs(st.favorites);
       var box = $('sources');

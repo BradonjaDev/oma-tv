@@ -9,10 +9,16 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Winziger Webserver auf dem Fernseher. Darueber wird die App bequem vom Handy aus eingerichtet
@@ -23,6 +29,9 @@ public final class SetupServer {
     /** Was die Einrichtungsseite vom Fernseher lesen und aendern darf. Aufrufe kommen aus Server-Threads. */
     public interface Backend {
         String getVersion();
+
+        /** User-Agent, mit dem die App Sender abruft. */
+        String getUserAgent();
 
         String getSources();
 
@@ -63,6 +72,12 @@ public final class SetupServer {
     private volatile boolean running;
     private boolean closed;
     private ExecutorService pool;
+    private ExecutorService checkPool;
+
+    /** Ergebnisse der Erreichbarkeitspruefung: Adresse -> {Zeitpunkt, 1 = erreichbar}. */
+    private final Map<String, long[]> checked = new ConcurrentHashMap<String, long[]>();
+    private static final long CHECK_VALID_MS = 5L * 60 * 1000;
+    private static final int MAX_CHECK = 12;
 
     public SetupServer(Backend backend, String pageHtml) {
         this.backend = backend;
@@ -99,6 +114,7 @@ public final class SetupServer {
         if (server == null) throw last != null ? last : new IOException("Kein freier Port");
         running = true;
         pool = Executors.newFixedThreadPool(4);
+        checkPool = Executors.newFixedThreadPool(6);
         final ServerSocket s = server;
         Thread t = new Thread(new Runnable() {
             @Override
@@ -141,6 +157,70 @@ public final class SetupServer {
             pool.shutdownNow();
             pool = null;
         }
+        if (checkPool != null) {
+            checkPool.shutdownNow();
+            checkPool = null;
+        }
+    }
+
+    /** Prueft die genannten Sender gleichzeitig und liefert {"r":{"Schluessel":true|false,...}}. */
+    private String checkJson(String body) {
+        Map<String, Channel> byKey = new HashMap<String, Channel>();
+        List<Channel> all = backend.getAllChannels();
+        for (int i = 0; i < all.size(); i++) byKey.put(all.get(i).key, all.get(i));
+        final String ua = backend.getUserAgent();
+        List<String> keys = new ArrayList<String>();
+        List<Future<Boolean>> results = new ArrayList<Future<Boolean>>();
+        ExecutorService p = checkPool;
+        long now = System.currentTimeMillis();
+        String[] parts = body.replace("\r", "").split("\n");
+        for (int i = 0; i < parts.length && keys.size() < MAX_CHECK; i++) {
+            String key = parts[i].trim();
+            final Channel c = byKey.get(key);
+            if (c == null || keys.contains(key)) continue;
+            keys.add(key);
+            long[] known = checked.get(c.url);
+            if (known != null && now - known[0] < CHECK_VALID_MS) {
+                results.add(null);
+                continue;
+            }
+            Future<Boolean> f = null;
+            if (p != null) {
+                try {
+                    f = p.submit(new Callable<Boolean>() {
+                        @Override
+                        public Boolean call() {
+                            boolean ok = StreamChecker.isReachable(c, ua);
+                            checked.put(c.url, new long[] {System.currentTimeMillis(), ok ? 1 : 0});
+                            return Boolean.valueOf(ok);
+                        }
+                    });
+                } catch (RuntimeException ignored) {
+                }
+            }
+            results.add(f);
+        }
+        StringBuilder sb = new StringBuilder(64 + keys.size() * 32);
+        sb.append("{\"r\":{");
+        boolean first = true;
+        long deadline = System.currentTimeMillis() + 13000;
+        for (int i = 0; i < keys.size(); i++) {
+            Future<Boolean> f = results.get(i);
+            if (f != null) {
+                try {
+                    f.get(Math.max(1, deadline - System.currentTimeMillis()), TimeUnit.MILLISECONDS);
+                } catch (Exception ignored) {
+                    // Zeit abgelaufen oder abgebrochen: Ergebnis bleibt offen
+                }
+            }
+            long[] known = checked.get(byKey.get(keys.get(i)).url);
+            if (known == null) continue;
+            if (!first) sb.append(',');
+            first = false;
+            sb.append(quote(keys.get(i))).append(':').append(known[1] == 1);
+        }
+        sb.append("}}");
+        return sb.toString();
     }
 
     private void acceptLoop(ServerSocket s) {
@@ -248,6 +328,10 @@ public final class SetupServer {
                 // Der eigene Kopf verhindert, dass fremde Webseiten heimlich Einstellungen aendern.
                 if (!marker) {
                     send(out, 403, "text/plain; charset=utf-8", bytes("Nicht erlaubt"));
+                    return;
+                }
+                if (path.equals("/api/check")) {
+                    send(out, 200, "application/json; charset=utf-8", bytes(checkJson(body)));
                     return;
                 }
                 if (path.equals("/api/sources")) {
