@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.io.StringReader;
 import java.io.Writer;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -77,9 +78,39 @@ public final class PlaylistLoader {
         return out;
     }
 
+    /** true, wenn statt Links der Inhalt einer M3U-Playlist eingefuegt wurde. */
+    public static boolean isInlinePlaylist(String text) {
+        if (text == null) return false;
+        String upper = text.toUpperCase(Locale.ROOT);
+        return upper.contains("#EXTINF") || upper.trim().startsWith("#EXTM3U");
+    }
+
+    /** true, wenn das Eingabefeld etwas Ladbares enthaelt (Links oder eine eingefuegte Playlist). */
+    public static boolean hasSources(String text) {
+        return isInlinePlaylist(text) || !parseSources(text).isEmpty();
+    }
+
     /** Laedt alle Links. Wirft nie; Fehler stehen in {@link Outcome#errors}. */
     public static Outcome loadAll(String sourcesText, String userAgent) {
         Outcome out = new Outcome();
+        if (isInlinePlaylist(sourcesText)) {
+            // Der Text ist selbst die Senderliste: direkt lesen, nichts herunterladen.
+            try {
+                M3uParser.Result r = M3uParser.parse(new BufferedReader(new StringReader(sourcesText)));
+                out.skippedVod = r.skippedVod;
+                if (r.channels.isEmpty()) {
+                    out.errors.add(r.skippedVod > 0
+                            ? "Die eingefügte Playlist enthält nur Filme/Serien, keine Sender"
+                            : "In der eingefügten Playlist wurden keine Sender gefunden");
+                } else {
+                    out.channels.addAll(r.channels);
+                }
+            } catch (IOException e) {
+                out.errors.add("Playlist: " + describe(e));
+            }
+            assignKeys(out.channels);
+            return out;
+        }
         List<Source> sources = parseSources(sourcesText);
         for (int i = 0; i < sources.size(); i++) {
             Source s = sources.get(i);

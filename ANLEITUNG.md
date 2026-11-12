@@ -31,7 +31,7 @@ Falls du Downloader nicht findest: die APK am Handy über dieselbe Adresse herun
 Beim ersten Start zeigt der Fernseher eine Adresse wie `http://192.168.178.50:8080`.
 
 1. Handy ins gleiche WLAN bringen und die Adresse im Browser öffnen.
-2. **M3U-Link** einfügen → **Speichern und Sender laden**. Mehrere Links: einer pro Zeile.
+2. **M3U-Link** einfügen → **Speichern und Sender laden**. Mehrere Links: einer pro Zeile. Statt eines Links kannst du auch den ganzen Inhalt einer M3U-Playlist einfügen.
 3. Unter **Sender hinzufügen** bei Omas Sendern auf **+** tippen. Mit ▲▼ in ihre gewohnte Reihenfolge bringen (1 = Das Erste, 2 = ZDF …).
 4. Auf einen Sendernamen tippen spielt ihn sofort am Fernseher – so testest du jeden Sender.
 
@@ -59,7 +59,7 @@ Fällt ein Sender aus, versucht die App es von selbst immer wieder. Oma muss nic
 
 Oma TV läuft auch direkt auf einem Android-Handy oder -Tablet, im Hoch- und Querformat.
 
-- **Einrichten:** Beim ersten Start auf **M3U-Link eingeben** tippen, den Link einfügen, **Speichern**. Über **Einrichtungsseite öffnen** lassen sich im Browser Omas Sender auswählen und sortieren.
+- **Einrichten:** Beim ersten Start auf **M3U-Link oder Playlist eingeben** tippen, den Link oder den Inhalt der Playlist einfügen, **Speichern**. Über **Einrichtungsseite öffnen** lassen sich im Browser Omas Sender auswählen und sortieren.
 - **Umschalten:** nach oben oder unten wischen, oder oben bzw. unten auf das Bild tippen.
 - **Senderliste:** in die Mitte tippen, mit dem Finger scrollen, Sender antippen.
 - **Einstellungen:** lange auf das Bild drücken, oder in der Senderliste unten auf **⚙ Einstellungen** tippen.

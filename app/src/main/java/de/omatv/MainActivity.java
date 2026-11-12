@@ -474,7 +474,7 @@ public class MainActivity extends Activity implements SetupServer.Backend {
         steps.setText(isTv
                 ? "1.  Handy ins gleiche WLAN wie diesen Fernseher bringen\n"
                 + "2.  Im Browser des Handys diese Adresse öffnen:"
-                : "Tippe unten auf „M3U-Link eingeben“.\n"
+                : "Tippe unten auf „M3U-Link oder Playlist eingeben“.\n"
                 + "Oder öffne an einem anderen Gerät im gleichen WLAN diese Adresse im Browser:");
         steps.setLineSpacing(dp(6), 1f);
         LinearLayout.LayoutParams stepsLp = new LinearLayout.LayoutParams(MATCH, WRAP);
@@ -494,11 +494,11 @@ public class MainActivity extends Activity implements SetupServer.Backend {
         setupBox.addView(setupAddress, addrLp);
         TextView step3 = text(26, WHITE, false);
         step3.setText(isTv
-                ? "3.  Dort den M3U-Link einfügen und Omas Sender auswählen"
+                ? "3.  Dort den M3U-Link oder die Playlist einfügen und Omas Sender auswählen"
                 : "Dort lassen sich auch Omas Sender auswählen und sortieren.");
         setupBox.addView(step3, new LinearLayout.LayoutParams(MATCH, WRAP));
         if (!isTv) {
-            TextView linkButton = button("M3U-Link eingeben", true);
+            TextView linkButton = button("M3U-Link oder Playlist eingeben", true);
             linkButton.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
@@ -1030,8 +1030,8 @@ public class MainActivity extends Activity implements SetupServer.Backend {
     // ------------------------------------------------------------------ Senderliste laden
 
     private void maybeRefresh() {
-        if (PlaylistLoader.parseSources(sources).isEmpty()) {
-            if (all.isEmpty()) status = "Noch kein M3U-Link hinterlegt";
+        if (!PlaylistLoader.hasSources(sources)) {
+            if (all.isEmpty()) status = "Noch kein M3U-Link und keine Playlist hinterlegt";
             updateTexts();
             return;
         }
@@ -1049,8 +1049,8 @@ public class MainActivity extends Activity implements SetupServer.Backend {
 
     private void refresh() {
         final String src = sources;
-        if (PlaylistLoader.parseSources(src).isEmpty()) {
-            status = "Fehler: Das ist kein gültiger Link";
+        if (!PlaylistLoader.hasSources(src)) {
+            status = "Fehler: Das ist kein gültiger Link und keine M3U-Playlist";
             updateTexts();
             return;
         }
@@ -1420,7 +1420,7 @@ public class MainActivity extends Activity implements SetupServer.Backend {
     /** Kleines Menue (per langem Druecken), um die App direkt am Handy einzurichten. */
     private void openSettingsMenu() {
         final String[] items = {
-                "M3U-Link eingeben",
+                "M3U-Link oder Playlist eingeben",
                 "Sender auswählen (Einrichtungsseite)",
                 "Senderliste neu laden",
                 "Autostart erlauben"
@@ -1469,15 +1469,15 @@ public class MainActivity extends Activity implements SetupServer.Backend {
         wrap.addView(edit, new FrameLayout.LayoutParams(MATCH, WRAP));
         try {
             final AlertDialog dlg = new AlertDialog.Builder(this, DIALOG_THEME)
-                    .setTitle("M3U-Link eingeben")
-                    .setMessage("Ein Link pro Zeile. Danach werden die Sender geladen.")
+                    .setTitle("M3U-Link oder Playlist")
+                    .setMessage("Füge einen M3U-Link ein (mehrere: einer pro Zeile) oder gleich den ganzen Inhalt einer M3U-Playlist.")
                     .setView(wrap)
                     .setPositiveButton("Speichern", new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface d, int which) {
                             String text = edit.getText().toString().replace("\r", "").trim();
                             if (text.isEmpty()) {
-                                toast("Bitte zuerst einen M3U-Link einfügen");
+                                toast("Bitte zuerst einen M3U-Link oder eine Playlist einfügen");
                                 return;
                             }
                             setSources(text);

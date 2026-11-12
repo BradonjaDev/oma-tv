@@ -86,9 +86,9 @@ li:first-child { border-top: 0; }
 </header>
 <main>
   <section class="card">
-    <h2><span class="step">1</span>M3U-Link</h2>
-    <p class="hint">Ein Link pro Zeile. Ist ein Link nur ein einzelner Sender, kannst du den Namen davor schreiben, z. B. <code>ZDF https://…</code></p>
-    <textarea id="sources" rows="3" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="http://…" aria-label="M3U-Links"></textarea>
+    <h2><span class="step">1</span>M3U-Link oder Playlist</h2>
+    <p class="hint">Ein Link pro Zeile, oder füge gleich den ganzen Inhalt einer M3U-Playlist ein (beginnt mit <code>#EXTM3U</code>). Ist ein Link nur ein einzelner Sender, kannst du den Namen davor schreiben, z. B. <code>ZDF https://…</code></p>
+    <textarea id="sources" rows="3" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="http://…" aria-label="M3U-Links oder Playlist"></textarea>
     <div class="row">
       <button id="saveSources" class="primary">Speichern und Sender laden</button>
       <button id="reload">Neu laden</button>
@@ -329,7 +329,7 @@ li:first-child { border-top: 0; }
 
   $('saveSources').onclick = function () {
     var text = $('sources').value.trim();
-    if (!text) { toast('Bitte zuerst einen M3U-Link einfügen'); return; }
+    if (!text) { toast('Bitte zuerst einen M3U-Link oder eine Playlist einfügen'); return; }
     api('/api/sources', text).then(function () {
       sourcesDirty = false;
       toast('Gespeichert – Sender werden geladen …');

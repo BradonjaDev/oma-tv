@@ -27,7 +27,7 @@ Tasten bedienen. Mehr gibt es nicht, und genau das ist der Punkt.
 - **Bedienung wie am alten Fernseher:** ▲▼ oder P+/P− schaltet um, Zahlen wählen direkt, OK zeigt die Senderliste
 - **Oma-sicher:** „Zurück“ verlässt die App am Fernseher nicht, es gibt nichts zu verstellen
 - **Fällt ein Sender aus,** versucht die App es von selbst weiter
-- **Einrichtung vom Handy:** die App zeigt eine Adresse an, im Browser fügst du den M3U-Link ein und wählst Omas Sender aus
+- **Einrichtung vom Handy:** die App zeigt eine Adresse an, im Browser fügst du den M3U-Link oder gleich die ganze M3U-Playlist ein und wählst Omas Sender aus
 - **Läuft auch auf Handy und Tablet:** mit Wischen und Tippen, im Hoch- und Querformat
 - Kein Konto, keine Werbung, keine Datensammlung
 
@@ -50,7 +50,7 @@ Die ausführliche Schritt-für-Schritt-Anleitung steht in [ANLEITUNG.md](ANLEITU
 | OK | in die Mitte tippen | Senderliste |
 | Zahlen | – | Sender direkt wählen |
 | Zurück | Zurück | TV: schließt nur die Liste · Handy: App in den Hintergrund |
-| – | lange drücken | Einstellungen (M3U-Link, Sender auswählen) |
+| – | lange drücken | Einstellungen (M3U-Link oder Playlist, Sender auswählen) |
 
 ## Selbst bauen
 
@@ -78,6 +78,6 @@ Java ohne Kotlin und ohne AppCompat, Media3/ExoPlayer für die Wiedergabe, ab An
 
 ## Gut zu wissen
 
-- Oma TV bringt **keine Sender mit**. Du brauchst einen eigenen M3U-Link, zum Beispiel von deinem Internet- oder TV-Anbieter.
+- Oma TV bringt **keine Sender mit**. Du brauchst einen eigenen M3U-Link oder eine M3U-Playlist, zum Beispiel von deinem Internet- oder TV-Anbieter.
 - Die Einrichtungsseite kann jeder im selben WLAN öffnen, solange die App läuft.
 - Der Signaturschlüssel liegt bewusst im Repository, damit sich Updates über die installierte App installieren lassen. Für eine private App ist das unkritisch.
