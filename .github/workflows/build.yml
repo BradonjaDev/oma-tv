@@ -1,72 +1,105 @@
-name: APK bauen
+name: Build & Release
+
+# Jeder Push und jeder Pull Request wird gebaut.
+# Ein Release entsteht nur, wenn auf main eine neue versionName in app/build.gradle steht:
+# dann wird der Tag v<version> genau auf diesen Commit gesetzt und die APK angehaengt.
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
+    paths-ignore: ['**.md']
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  apk:
+  build:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
-      - name: Projekt finden (ZIP auspacken, falls noetig)
+      - name: Version auslesen
         run: |
-          if [ -f settings.gradle ]; then
-            SRC="."
+          VERSION="$(sed -n "s/^[[:space:]]*versionName[[:space:]]*['\"]\([^'\"]*\)['\"].*/\1/p" app/build.gradle)"
+          CODE="$(sed -n 's/^[[:space:]]*versionCode[[:space:]]*\([0-9]*\).*/\1/p' app/build.gradle)"
+          [ -n "$VERSION" ] || { echo "::error::versionName nicht gefunden"; exit 1; }
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "TAG=v$VERSION" >> "$GITHUB_ENV"
+          echo "Version $VERSION (Code $CODE)"
+
+      - name: Signaturschluessel bereitstellen
+        env:
+          KEYSTORE_BASE64: ${{ secrets.OMA_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.OMA_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/oma-tv.keystore"
+            echo "OMA_KEYSTORE_FILE=$RUNNER_TEMP/oma-tv.keystore" >> "$GITHUB_ENV"
+            echo "OMA_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
           else
-            ZIP="$(ls *.zip 2>/dev/null | head -n 1)"
-            if [ -z "$ZIP" ]; then
-              echo "::error::Keine ZIP-Datei gefunden. Bitte oma-tv-projekt.zip in das Repository hochladen."
-              exit 1
-            fi
-            unzip -q "$ZIP" -d work
-            SETTINGS="$(find work -maxdepth 3 -name settings.gradle | head -n 1)"
-            if [ -z "$SETTINGS" ]; then
-              echo "::error::In der ZIP-Datei steckt kein Oma-TV-Projekt."
-              exit 1
-            fi
-            SRC="$(dirname "$SETTINGS")"
+            echo "::warning::Kein Signaturschluessel hinterlegt, es wird mit dem Debug-Schluessel signiert."
           fi
-          echo "SRC=$SRC" >> "$GITHUB_ENV"
 
       - name: APK bauen
         run: |
-          cd "$SRC"
           chmod +x gradlew
           ./gradlew --no-daemon assembleRelease
-
-      - name: APK einsammeln
-        run: |
-          APK="$(find "$SRC/app/build/outputs/apk/release" -name '*.apk' | head -n 1)"
-          if [ -z "$APK" ]; then
-            echo "::error::Es wurde keine APK erzeugt."
-            exit 1
-          fi
+          APK="$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)"
+          [ -n "$APK" ] || { echo "::error::Es wurde keine APK erzeugt."; exit 1; }
           cp "$APK" oma-tv.apk
-          ls -l oma-tv.apk
+          cp "$APK" "oma-tv-$VERSION.apk"
+          ls -l oma-tv*.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: oma-tv-apk
-          path: oma-tv.apk
+          name: oma-tv-${{ env.VERSION }}
+          path: oma-tv-${{ env.VERSION }}.apk
 
-      - name: Zum Herunterladen bereitstellen
+      - name: Release erstellen (nur bei neuer Version)
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view apk >/dev/null 2>&1; then
-            gh release upload apk oma-tv.apk --clobber
-          else
-            gh release create apk oma-tv.apk --title "Oma TV" --notes "Automatisch gebaute App. Datei oma-tv.apk auf dem TV-Stick installieren."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Version $VERSION ist schon veroeffentlicht, kein neuer Release."
+            exit 0
           fi
+          PREV="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)"
+          {
+            echo "## Neu in Version $VERSION"
+            echo
+            if [ -n "$PREV" ]; then
+              git log --no-merges --format='- %s' "$PREV..HEAD"
+            else
+              git log --no-merges --format='- %s' -n 15
+            fi
+            echo
+            echo "## Installieren"
+            echo
+            echo "\`oma-tv.apk\` herunterladen und auf dem TV-Stick installieren, am einfachsten mit der App **Downloader**."
+            echo "Eine neue Version laesst sich einfach ueber die alte installieren, die Einstellungen bleiben erhalten."
+            echo
+            echo "Fester Download-Link fuer die jeweils neueste Version:"
+            echo "\`https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/oma-tv.apk\`"
+          } > notes.md
+          cat notes.md
+          gh release create "$TAG" oma-tv.apk "oma-tv-$VERSION.apk" \
+            --target "$GITHUB_SHA" \
+            --title "Oma TV $VERSION" \
+            --notes-file notes.md \
+            --latest

@@ -12,7 +12,7 @@ Die fertige Installationsdatei (APK) liegt immer unter dieser Adresse:
 
 `github.com/BradonjaDev/oma-tv/releases/latest/download/oma-tv.apk`
 
-GitHub baut sie bei jeder Änderung am Projekt automatisch neu. Du musst nichts programmieren.
+GitHub baut sie bei jeder neuen Version automatisch. Du musst nichts programmieren. Ältere Versionen und die Liste der Änderungen findest du unter [Releases](https://github.com/BradonjaDev/oma-tv/releases).
 
 **Eigene Kopie (optional):** Wer das Projekt selbst verwalten möchte, meldet sich auf [github.com](https://github.com) an, klickt auf der Projektseite oben rechts auf **Fork** und schaltet im Reiter **Actions** die Workflows ein. Nach dem ersten Lauf von „APK bauen“ liegt die APK unter `github.com/DEIN-NAME/oma-tv/releases/latest/download/oma-tv.apk`.
 
@@ -71,4 +71,4 @@ Oma TV läuft auch direkt auf einem Android-Handy oder -Tablet, im Hoch- und Que
 - **Updates:** dieselbe Adresse im Downloader erneut öffnen und installieren. Einstellungen und Senderauswahl bleiben erhalten.
 - Bewusst weggelassen: Programmzeitschrift (EPG), Aufnahme, Filme und Serien aus der Liste (werden ausgeblendet).
 - Die Einrichtungsseite kann jeder im selben WLAN öffnen, solange Oma TV läuft.
-- Der Signaturschlüssel der App liegt im Projekt und ist damit öffentlich. Für eine private App ist das unkritisch; wer es nicht möchte, stellt das GitHub-Projekt auf „Private“ und lädt die APK angemeldet von der Projektseite unter „Releases“.
+- Der Signaturschlüssel der App liegt nicht öffentlich im Projekt, sondern geschützt in den GitHub-Secrets. Eine eigene Kopie (Fork) baut die APK mit einem eigenen Schlüssel; die lässt sich dann nicht über die Original-App installieren, sondern nur nach deren Deinstallation.

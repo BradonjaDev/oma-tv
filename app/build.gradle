@@ -15,23 +15,31 @@ android {
     }
 
     // Fester Schluessel, damit sich spaetere Versionen ueber die alte installieren lassen
-    // (Einstellungen bleiben erhalten). Fuer eine private App voellig ausreichend.
+    // (Einstellungen bleiben erhalten). Der Schluessel kommt aus den Umgebungsvariablen
+    // OMA_KEYSTORE_FILE und OMA_KEYSTORE_PASSWORD (in GitHub Actions aus den Secrets).
+    // Fehlen sie, etwa in einem Fork, wird mit dem Debug-Schluessel signiert.
+    def keystoreFile = System.getenv('OMA_KEYSTORE_FILE')
+    def keystorePassword = System.getenv('OMA_KEYSTORE_PASSWORD')
+    def hasOmaKey = keystoreFile && keystorePassword && file(keystoreFile).exists()
+
     signingConfigs {
-        oma {
-            storeFile rootProject.file('oma-tv.keystore')
-            storePassword 'omatv-privat'
-            keyAlias 'omatv'
-            keyPassword 'omatv-privat'
+        if (hasOmaKey) {
+            oma {
+                storeFile file(keystoreFile)
+                storePassword keystorePassword
+                keyAlias 'omatv'
+                keyPassword keystorePassword
+            }
         }
     }
 
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig signingConfigs.oma
+            signingConfig hasOmaKey ? signingConfigs.oma : signingConfigs.debug
         }
         debug {
-            signingConfig signingConfigs.oma
+            if (hasOmaKey) signingConfig signingConfigs.oma
         }
     }
 

@@ -7,7 +7,8 @@
 **Fernsehen wie früher.** Ein IPTV-Player für Android TV mit genau einer Aufgabe:
 Omas Sender zeigen und mit ▲▼ umschalten.
 
-[![APK bauen](https://github.com/BradonjaDev/oma-tv/actions/workflows/build.yml/badge.svg)](https://github.com/BradonjaDev/oma-tv/actions/workflows/build.yml)
+[![Version](https://img.shields.io/github/v/release/BradonjaDev/oma-tv?label=Version&color=1e88e5)](https://github.com/BradonjaDev/oma-tv/releases/latest)
+[![Build](https://github.com/BradonjaDev/oma-tv/actions/workflows/build.yml/badge.svg)](https://github.com/BradonjaDev/oma-tv/actions/workflows/build.yml)
 [![Download](https://img.shields.io/badge/Download-oma--tv.apk-ffc107?logo=android&logoColor=white)](https://github.com/BradonjaDev/oma-tv/releases/latest/download/oma-tv.apk)
 ![Android](https://img.shields.io/badge/Android-7.0%2B-3ddc84?logo=android&logoColor=white)
 
@@ -42,6 +43,10 @@ https://github.com/BradonjaDev/oma-tv/releases/latest/download/oma-tv.apk
 Auf dem TV-Stick am einfachsten mit der App **Downloader**: Adresse eintippen, installieren, fertig.
 Die ausführliche Schritt-für-Schritt-Anleitung steht in [ANLEITUNG.md](ANLEITUNG.md).
 
+Ältere Versionen und was sich jeweils geändert hat, stehen unter
+[Releases](https://github.com/BradonjaDev/oma-tv/releases). Ein Update installierst du einfach
+über die alte Version, die Einstellungen bleiben erhalten.
+
 ## Wo bekomme ich eine Senderliste?
 
 Oma TV bringt keine Sender mit. Wer keinen eigenen M3U-Link hat, nimmt die frei zugänglichen
@@ -60,14 +65,21 @@ Sender von [iptv-org/iptv](https://github.com/iptv-org/iptv): auf der Einrichtun
 
 ## Selbst bauen
 
-Es ist kein Android Studio nötig. GitHub baut die APK bei jedem Push auf `main` und legt sie
-im Release [`apk`](https://github.com/BradonjaDev/oma-tv/releases/tag/apk) ab.
+Es ist kein Android Studio nötig. GitHub Actions baut die APK bei jedem Push und jedem Pull Request.
+
+**Neue Version veröffentlichen:** in `app/build.gradle` `versionCode` um 1 und `versionName`
+erhöhen (z. B. `1.6` → `1.7`) und auf `main` pushen. Der Workflow setzt dann den Tag `v1.7`
+genau auf diesen Commit, erstellt den Release mit der Liste der Änderungen und hängt
+`oma-tv.apk` und `oma-tv-1.7.apk` an. Pushes ohne neue Versionsnummer werden nur gebaut und geprüft.
+So gehören APK und Quellcode in jedem Release garantiert zusammen.
 
 Lokal geht es mit JDK 17 und dem Android SDK so:
 
 ```
 ./gradlew assembleRelease
 ```
+
+Ohne Signaturschlüssel (siehe unten) wird die APK mit dem Debug-Schlüssel signiert.
 
 ## Aufbau
 
@@ -86,4 +98,4 @@ Java ohne Kotlin und ohne AppCompat, Media3/ExoPlayer für die Wiedergabe, ab An
 
 - Oma TV bringt **keine Sender mit**. Du brauchst einen M3U-Link oder eine M3U-Playlist: von deinem Internet- oder TV-Anbieter oder aus einer der [frei zugänglichen Listen](#wo-bekomme-ich-eine-senderliste).
 - Die Einrichtungsseite kann jeder im selben WLAN öffnen, solange die App läuft.
-- Der Signaturschlüssel liegt bewusst im Repository, damit sich Updates über die installierte App installieren lassen. Für eine private App ist das unkritisch.
+- Der Signaturschlüssel liegt nicht im Repository, sondern in den GitHub-Secrets `OMA_KEYSTORE_BASE64` und `OMA_KEYSTORE_PASSWORD`. Er bleibt immer derselbe, damit sich Updates über die installierte App installieren lassen.
